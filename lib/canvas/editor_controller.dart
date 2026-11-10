@@ -95,6 +95,10 @@ class EditorController extends ChangeNotifier {
     final tool = settings.tool;
     final paints = tool.isPen || tool.isShape || tool == EditTool.gradient;
     if (paints && !canPaint) return;
+    if (subtract && tool.picksWithAlt) {
+      pickAt(point).ignore();
+      return;
+    }
     final color = settings.color1.withValues(alpha: settings.opacity);
     switch (tool) {
       case EditTool.move:
@@ -277,15 +281,16 @@ class EditorController extends ChangeNotifier {
     );
   }
 
-  /// Covers the selection, or the whole layer, with the foreground color.
-  void fillSelection() {
-    _commitPaint(
-      (canvas) => canvas.drawPaint(Paint()..color = settings.color1),
-    );
+  /// Covers the selection, or the whole layer, with the foreground color,
+  /// or with the [background] one.
+  void fillSelection({bool background = false}) {
+    final color = background ? settings.color2 : settings.color1;
+    _commitPaint((canvas) => canvas.drawPaint(Paint()..color = color));
   }
 
-  /// PNG of the selected part of the active layer, or of all of it.
-  Future<Uint8List?> copyPng() async {
+  /// The selected part of the active layer, or all of what the image shows
+  /// of it, and where it sits. Null when there is nothing there.
+  (ui.Image, Offset)? _selectedPiece() {
     final layer = activeLayer;
     final area = _wholePixels(
       selectionBounds ?? imageRect,
@@ -299,10 +304,18 @@ class EditorController extends ChangeNotifier {
       if (selection != null) canvas.clipPath(selection);
       canvas.drawImage(layer.image, layer.offset, Paint());
     });
+    return (piece, area.topLeft);
+  }
+
+  /// PNG of the selected part of the active layer, or of all of it.
+  Future<Uint8List?> copyPng() async {
+    final selected = _selectedPiece();
+    if (selected == null) return null;
+    final (piece, at) = selected;
     try {
       final png = await encodePng(piece);
       _copied = png;
-      _copiedAt = area.topLeft;
+      _copiedAt = at;
       return png;
     } finally {
       piece.dispose();
@@ -524,6 +537,17 @@ class EditorController extends ChangeNotifier {
     );
   }
 
+  /// A new layer with the selected part of the active one, or a copy of the
+  /// whole layer when nothing is selected.
+  void layerFromSelection() {
+    if (_selection == null) return duplicateLayer();
+    final selected = _selectedPiece();
+    if (selected == null) return;
+    final (piece, at) = selected;
+    _selection = null;
+    _insertAbove(_newLayer(piece, offset: at));
+  }
+
   void deleteLayer() {
     if (document.layers.length < 2) return;
     final index = document.activeIndex;
@@ -604,6 +628,21 @@ class EditorController extends ChangeNotifier {
 
   void lowerLayer() =>
       moveLayer(document.activeIndex, document.activeIndex - 1);
+
+  void raiseLayerToTop() =>
+      moveLayer(document.activeIndex, document.layers.length - 1);
+
+  void lowerLayerToBottom() => moveLayer(document.activeIndex, 0);
+
+  /// Makes the layer [step] places above the active one the active one.
+  void activateLayerBy(int step) {
+    final index = document.activeIndex + step;
+    if (index < 0 || index >= document.layers.length) return;
+    document.activeId = document.layers[index].id;
+  }
+
+  void toggleLayerVisible() =>
+      setLayerVisible(activeLayer.id, !activeLayer.visible);
 
   void renameLayer(int id, String name) {
     final layer = _layer(id);

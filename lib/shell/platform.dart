@@ -13,15 +13,25 @@ bool get isDesktopPlatform =>
         defaultTargetPlatform == TargetPlatform.linux);
 
 /// Command on Apple platforms, Ctrl elsewhere.
-SingleActivator shortcut(LogicalKeyboardKey key, {bool shift = false}) =>
-    SingleActivator(
-      key,
-      control: !isApplePlatform,
-      meta: isApplePlatform,
-      shift: shift,
-    );
+SingleActivator shortcut(
+  LogicalKeyboardKey key, {
+  bool shift = false,
+  bool alt = false,
+}) => SingleActivator(
+  key,
+  control: !isApplePlatform,
+  meta: isApplePlatform,
+  shift: shift,
+  alt: alt,
+);
 
-/// How a shortcut is written in tooltips: "⌘Z" or "Ctrl+Z".
-String shortcutLabel(String key, {bool shift = false}) => isApplePlatform
-    ? '${shift ? '⇧' : ''}⌘$key'
-    : 'Ctrl+${shift ? 'Shift+' : ''}$key';
+/// How a shortcut is written in tooltips: "⌘Z" or "Ctrl+Z". [command] is
+/// false for the ones that go without Command or Ctrl.
+String shortcutLabel(
+  String key, {
+  bool shift = false,
+  bool alt = false,
+  bool command = true,
+}) => isApplePlatform
+    ? '${alt ? '⌥' : ''}${shift ? '⇧' : ''}${command ? '⌘' : ''}$key'
+    : '${command ? 'Ctrl+' : ''}${alt ? 'Alt+' : ''}${shift ? 'Shift+' : ''}$key';

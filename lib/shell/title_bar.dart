@@ -150,7 +150,7 @@ class _QuickButtons extends StatelessWidget {
         ),
         RibbonIconButton(
           icon: Icons.redo,
-          tooltip: '${l10n.redo} (${shortcutLabel('Y')})',
+          tooltip: '${l10n.redo} (${shortcutLabel('Z', shift: true)})',
           onPressed: actions.redo,
         ),
         if (wide) ...[

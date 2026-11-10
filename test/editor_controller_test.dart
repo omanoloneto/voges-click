@@ -239,6 +239,83 @@ void main() {
     });
   });
 
+  testWidgets('the selection fills with either color and becomes a layer', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor();
+      controller.settings
+        ..color1 = red
+        ..color2 = blue;
+      _selectRect(controller, const Rect.fromLTWH(0, 0, 10, 10));
+      controller.fillSelection();
+      _selectRect(controller, const Rect.fromLTWH(20, 0, 10, 10));
+      controller.fillSelection(background: true);
+      var pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(5, 5), 0xFFFF0000);
+      expect(pixels.colorAt(25, 5), 0xFF0000FF);
+      expect(pixels.colorAt(15, 5), 0xFFFFFFFF);
+
+      _selectRect(controller, const Rect.fromLTWH(0, 0, 10, 10));
+      controller.layerFromSelection();
+      expect(controller.hasSelection, isFalse);
+      expect(controller.document.layers, hasLength(2));
+      expect(controller.activeLayer.bounds, const Rect.fromLTWH(0, 0, 10, 10));
+      controller.setLayerVisible(1, false);
+      pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(5, 5), 0xFFFF0000);
+      expect(pixels.colorAt(25, 5) >>> 24, 0);
+
+      controller.layerFromSelection();
+      expect(controller.document.layers, hasLength(3));
+    });
+  });
+
+  testWidgets('layers jump to the ends, take turns and hide', (tester) async {
+    final controller = _editor();
+    controller
+      ..addLayer()
+      ..addLayer();
+    final top = controller.activeLayer.id;
+
+    controller.lowerLayerToBottom();
+    expect(controller.document.layers.first.id, top);
+    controller.raiseLayerToTop();
+    expect(controller.document.layers.last.id, top);
+
+    controller.activateLayerBy(-1);
+    expect(controller.document.activeIndex, 1);
+    controller
+      ..activateLayerBy(-1)
+      ..activateLayerBy(-1);
+    expect(controller.document.activeIndex, 0);
+
+    controller.toggleLayerVisible();
+    expect(controller.activeLayer.visible, isFalse);
+    controller.toggleLayerVisible();
+    expect(controller.activeLayer.visible, isTrue);
+  });
+
+  testWidgets('Alt makes a painting tool pick the color under it', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor();
+      controller.settings.color1 = red;
+      controller.fillSelection();
+      controller.settings
+        ..color1 = blue
+        ..tool = EditTool.brush;
+      controller.pointerDown(const Offset(10, 10), subtract: true);
+      controller.pointerUp();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(controller.settings.color1, red);
+      expect(controller.canUndo, isTrue);
+      controller.undo();
+      expect(controller.canUndo, isFalse);
+    });
+  });
+
   testWidgets('a PSD saved comes back with its layers', (tester) async {
     await tester.runAsync(() async {
       final controller = _editor();
