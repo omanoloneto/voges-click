@@ -2,7 +2,25 @@
 
 An image editor with layers for the desktop, in the spirit of Photoshop: paint, select, move and blend layers, and open `.psd` files. Part of the Voges suite, next to [Voges Word](https://github.com/omanoloneto/voges-word), [Voges Pencil](https://github.com/omanoloneto/voges-pencil), [Voges Tables](https://github.com/omanoloneto/voges-tables) and [Voges Slides](https://github.com/omanoloneto/voges-slides). Built with Flutter for macOS, Windows and Linux.
 
-Voges Click is at its first version and has no release yet: for now it runs from the source (see [Build](#build)).
+## Install
+
+The installers are in the [latest release](https://github.com/omanoloneto/voges-click/releases/latest) and on the [omanoloneto.pro/voges/click](https://omanoloneto.pro/voges/click/) page.
+
+- **macOS** 10.15 or newer, Apple Silicon and Intel: [`VogesClick-macos.dmg`](https://github.com/omanoloneto/voges-click/releases/latest/download/VogesClick-macos.dmg). Open it and drag Voges Click to Applications. The app is not notarized by Apple; the first time, allow it in System Settings → Privacy & Security → Open Anyway.
+- **Windows** 10 or 11, 64-bit: [`VogesClick-windows-setup.exe`](https://github.com/omanoloneto/voges-click/releases/latest/download/VogesClick-windows-setup.exe). It installs without administrator rights and shows up in "Open with" for `.psd` and the other images it opens, without becoming the default program. If SmartScreen warns you, click "More info" and then "Run anyway".
+- **Linux** (Ubuntu 22.04, Debian 12 or newer and derivatives, 64-bit): [`voges-click-linux-amd64.deb`](https://github.com/omanoloneto/voges-click/releases/latest/download/voges-click-linux-amd64.deb), then `sudo apt install ./voges-click-linux-amd64.deb`.
+
+`SHA256SUMS.txt` in each release lists the SHA-256 of every installer, and `SHA256SUMS.txt.sig` is its signature.
+
+### Updates
+
+Voges Click checks for a new version every time it opens and says in the status bar whether it is up to date. When there is an update, clicking it asks about unsaved changes, closes the app and opens **Voges Updater**, which lists every installed app of the Voges suite that has an update; update all of them or only some. When it finishes, Voges Click opens again.
+
+- The check reads the number of the latest release from github.com; nothing about you or your pictures is sent.
+- Every update is verified before it is installed: its files must match the `SHA256SUMS.txt` of the release, and that file must carry the Ed25519 signature of the project's key, which is built into the app. A download that doesn't match is never installed.
+- **macOS:** the updater replaces the app in its folder; if your account can't write to it, it puts the verified `.dmg` in Downloads for you to install. Voges Click stays sandboxed: the updater is a separate app inside it (`Contents/Helpers/Voges Updater.app`).
+- **Windows:** the installer runs silently; installs for all users ask for administrator permission.
+- **Linux:** the update is installed with `apt`, after the system asks for your password (polkit). Without a password window, the updater shows the command to run in a terminal.
 
 ## What it does
 
@@ -35,3 +53,18 @@ flutter pub get --enforce-lockfile
 flutter run -d macos     # or windows, linux
 flutter test
 ```
+
+Updates come from the `voges_updater` package of [Voges Word](https://github.com/omanoloneto/voges-word/tree/main/packages/voges_updater), a git dependency pinned to a commit in `pubspec.yaml` and `pubspec.lock`; `--enforce-lockfile` gets the locked commit.
+
+## Releases
+
+1. Set the new `version` in `pubspec.yaml` and write `packaging/release-notes.md`.
+2. Push a `vX.Y.Z` tag with the same version. `.github/workflows/release.yml` builds the three installers (the macOS one with Voges Updater embedded) and creates a draft release with them and `SHA256SUMS.txt`.
+3. Sign and publish the draft on the owner's Mac, from a Voges Word checkout:
+
+   ```sh
+   cd packages/voges_updater
+   dart run tool/release_signing.dart publish omanoloneto/voges-click vX.Y.Z --clone <path to the voges-click clone>
+   ```
+
+Release builds pass `--dart-define=VOGES_VERSION=<version>`; without it, as in `flutter run`, the update indicator stays hidden.
