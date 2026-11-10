@@ -12,6 +12,7 @@ class StatusBar extends StatelessWidget {
     required this.zoom,
     required this.onZoom,
     required this.onFit,
+    this.trailing,
     super.key,
   });
 
@@ -19,6 +20,9 @@ class StatusBar extends StatelessWidget {
   final double zoom;
   final ValueChanged<double> onZoom;
   final VoidCallback onFit;
+
+  /// Shown before the zoom, such as the update status.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +85,10 @@ class StatusBar extends StatelessWidget {
                   },
                 ),
               ),
+              if (trailing case final trailing?) ...[
+                Flexible(child: trailing),
+                const SizedBox(width: 12),
+              ],
               Text('${(zoom * 100).round()}%', style: style),
               IconButton(
                 iconSize: 16,
