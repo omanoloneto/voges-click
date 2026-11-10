@@ -1,0 +1,13 @@
+// Application-level settings for the Runner target.
+//
+// This may be replaced with something auto-generated from metadata (e.g., pubspec.yaml) in the
+// future. If so, the values below would be a good place to start.
+
+// The application's name. By default this is also the title of the Flutter window.
+PRODUCT_NAME = Voges Click
+
+// The application's bundle identifier
+PRODUCT_BUNDLE_IDENTIFIER = com.omanoloneto.vogesClick
+
+// The copyright displayed in application information
+PRODUCT_COPYRIGHT = Copyright © 2026 omanoloneto. All rights reserved.
