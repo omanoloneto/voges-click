@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../document/compositor.dart';
+import '../document/tile.dart';
 import 'editor_controller.dart';
 import 'free_transform.dart';
 import 'image_ops.dart';
@@ -366,8 +367,9 @@ class _OutlineCache {
 }
 
 class _CanvasPainter extends CustomPainter {
+  // a tile that settled is another image: what was painted holds the old
   _CanvasPainter(this.controller, this.zoom, this.checker, this.outline)
-    : super(repaint: controller);
+    : super(repaint: Listenable.merge([controller, tileSettler]));
 
   final EditorController controller;
   final double zoom;

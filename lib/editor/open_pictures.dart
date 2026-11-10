@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import '../canvas/editor_controller.dart';
-import '../canvas/image_ops.dart';
 import '../canvas/tool_settings.dart';
 import '../document/image_document.dart';
 import '../document/layer.dart';
+import '../document/tiled_image.dart';
 import '../painting/image_formats.dart';
 
 typedef LayerNamer = String Function(int number);
@@ -177,7 +177,11 @@ class OpenPictures extends ChangeNotifier {
               Layer(
                 id: 1,
                 name: _layerName(1),
-                image: blankImage(width, height, const Color(0xFFFFFFFF)),
+                pixels: TiledImage.filled(
+                  width,
+                  height,
+                  const Color(0xFFFFFFFF),
+                ),
               ),
             ]),
           ),

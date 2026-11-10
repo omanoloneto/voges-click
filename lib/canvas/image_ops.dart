@@ -11,7 +11,13 @@ import '../painting/rgba_image.dart';
 /// A new [width] × [height] image with what [draw] paints.
 ui.Image renderImage(int width, int height, void Function(Canvas canvas) draw) {
   final recorder = ui.PictureRecorder();
-  draw(Canvas(recorder));
+  final canvas = Canvas(recorder)
+    // lets what is drawn skip all that falls outside the image
+    ..clipRect(
+      Offset.zero & Size(width.toDouble(), height.toDouble()),
+      doAntiAlias: false,
+    );
+  draw(canvas);
   final picture = recorder.endRecording();
   try {
     return picture.toImageSync(width, height);
@@ -19,12 +25,6 @@ ui.Image renderImage(int width, int height, void Function(Canvas canvas) draw) {
     picture.dispose();
   }
 }
-
-ui.Image blankImage(int width, int height, Color color) => renderImage(
-  width,
-  height,
-  (canvas) => canvas.drawColor(color, BlendMode.src),
-);
 
 Future<RgbaImage> readPixels(ui.Image image) async {
   final data = await image.toByteData(
@@ -75,18 +75,6 @@ Future<ui.Image> _engineDecode(Uint8List bytes) async {
     codec.dispose();
   }
 }
-
-/// The part [area] of [image], in whole pixels.
-ui.Image cropImage(ui.Image image, Rect area) => renderImage(
-  area.width.round(),
-  area.height.round(),
-  (canvas) => canvas.drawImageRect(
-    image,
-    area,
-    Offset.zero & area.size,
-    Paint()..blendMode = BlendMode.src,
-  ),
-);
 
 enum Turn { left, right, flipHorizontal, flipVertical }
 

@@ -1,5 +1,7 @@
 import 'dart:ui' as ui;
 
+import 'tiled_image.dart';
+
 /// How a layer mixes with what is under it. The keys are the ones PSD
 /// files use.
 enum LayerBlend {
@@ -41,7 +43,7 @@ class Layer {
   const Layer({
     required this.id,
     required this.name,
-    required this.image,
+    required this.pixels,
     this.offset = ui.Offset.zero,
     this.visible = true,
     this.opacity = 1,
@@ -50,19 +52,19 @@ class Layer {
 
   final int id;
   final String name;
-  final ui.Image image;
+  final TiledImage pixels;
   final ui.Offset offset;
   final bool visible;
   final double opacity;
   final LayerBlend blend;
 
   ui.Rect get bounds =>
-      offset & ui.Size(image.width.toDouble(), image.height.toDouble());
+      offset & ui.Size(pixels.width.toDouble(), pixels.height.toDouble());
 
   Layer copyWith({
     int? id,
     String? name,
-    ui.Image? image,
+    TiledImage? pixels,
     ui.Offset? offset,
     bool? visible,
     double? opacity,
@@ -70,7 +72,7 @@ class Layer {
   }) => Layer(
     id: id ?? this.id,
     name: name ?? this.name,
-    image: image ?? this.image,
+    pixels: pixels ?? this.pixels,
     offset: offset ?? this.offset,
     visible: visible ?? this.visible,
     opacity: opacity ?? this.opacity,

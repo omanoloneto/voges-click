@@ -107,7 +107,11 @@ Future<void> _until(bool Function() done) async {
 
 /// A PNG file of one color.
 Future<Uint8List> _png(int width, int height, Color color) async {
-  final image = blankImage(width, height, color);
+  final image = renderImage(
+    width,
+    height,
+    (canvas) => canvas.drawColor(color, ui.BlendMode.src),
+  );
   final png = await encodePng(image);
   image.dispose();
   return png;
@@ -195,7 +199,7 @@ void main() {
     await _chord(tester, [_control], LogicalKeyboardKey.keyW);
     await tester.pumpAndSettle();
     expect(pictures.pictures, [first]);
-    expect(second.document.layers.single.image.debugDisposed, isTrue);
+    expect(second.document.layers.single.pixels.tiles.single.disposed, isTrue);
     expect(find.text('200 × 100 px'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Zoom in'));
@@ -251,7 +255,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(pictures.pictures, [first, third]);
     expect(pictures.active, same(third));
-    expect(second.document.layers.single.image.debugDisposed, isTrue);
+    expect(second.document.layers.single.pixels.tiles.single.disposed, isTrue);
     expect(tester.takeException(), isNull);
   });
 
@@ -319,8 +323,8 @@ void main() {
     // a new layer with those pixels, at the top left of what is in sight
     expect(to.document.layers, hasLength(2));
     expect(to.controller.activeLayer.offset, Offset.zero);
-    expect(to.controller.activeLayer.image.width, 8);
-    expect(to.controller.activeLayer.image.height, 6);
+    expect(to.controller.activeLayer.pixels.width, 8);
+    expect(to.controller.activeLayer.pixels.height, 6);
     final pixels = (await tester.runAsync(() => composite(to.document.state)))!;
     expect(pixels.colorAt(3, 3), 0xFFFF0000);
     expect(pixels.colorAt(12, 12), 0xFFFFFFFF);

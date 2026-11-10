@@ -59,15 +59,26 @@ void main() {
     expect(fillMask(image, 0, 0), [1, 1, 1]);
   });
 
-  test('the layer has the color on the area and is clear elsewhere', () {
-    final image = _image(2, 1, 0xFFFFFFFF);
-    _set(image, 1, 0, 0xFF000000);
-    final layer = fillLayer(image, 0, 0, 0xFFED1C24)!;
-    expect(layer, [0xED, 0x1C, 0x24, 0xFF, 0, 0, 0, 0]);
-  });
+  test(
+    'the patch is the box of the area: the color on it, clear elsewhere',
+    () {
+      final image = _image(5, 4, 0xFFFFFFFF);
+      for (final (x, y) in [(1, 1), (2, 1), (3, 1), (2, 2)]) {
+        _set(image, x, y, 0xFF000000);
+      }
+      final patch = fillPatch(image, 2, 1, 0xFFED1C24, tolerance: 0)!;
+      expect((patch.left, patch.top, patch.width, patch.height), (1, 1, 3, 2));
+      const color = [0xED, 0x1C, 0x24, 0xFF], clear = [0, 0, 0, 0];
+      expect(patch.pixels, [
+        ...color, ...color, ...color, //
+        ...clear, ...color, ...clear,
+      ]);
+    },
+  );
 
   test('outside the image there is nothing to fill', () {
     expect(fillMask(_image(2, 2, 0xFFFFFFFF), 2, 0), isNull);
     expect(fillMask(_image(2, 2, 0xFFFFFFFF), -1, 0), isNull);
+    expect(fillPatch(_image(2, 2, 0xFFFFFFFF), 0, 2, 0xFFED1C24), isNull);
   });
 }

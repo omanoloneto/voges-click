@@ -4,26 +4,33 @@ import 'dart:ui';
 import '../canvas/marks.dart';
 import 'image_document.dart';
 import 'layer.dart';
+import 'tiled_image.dart';
 
 /// Pixels lifted off a layer while they are being transformed.
 class FloatingPiece {
   const FloatingPiece({
-    required this.image,
+    required this.pixels,
+    required this.part,
     required this.matrix,
     required this.smooth,
     this.rest,
   });
 
-  final Image image;
+  /// The image the piece is a part of, never copied to be shown.
+  final TiledImage pixels;
 
-  /// Takes the pixels of [image] to where they show on the document.
+  /// The part of [pixels] that floats.
+  final Rect part;
+
+  /// Takes the pixels of [part], counted from its top left corner, to
+  /// where they show on the document.
   final Float64List matrix;
 
   /// Scaled or turned pixels are blended; moved ones stay as they are.
   final bool smooth;
 
   /// What stays of the layer under the piece; null when all of it floats.
-  final Image? rest;
+  final TiledImage? rest;
 }
 
 /// What is still being done to one layer and shows before it is committed:
@@ -69,37 +76,42 @@ void paintLayers(
       ..blendMode = layer.blend.mode
       ..filterQuality = quality;
     if (live == null || live.layerId != layer.id) {
-      canvas.drawImage(layer.image, layer.offset, paint);
+      layer.pixels.paint(canvas, layer.offset, paint);
       continue;
     }
     final plain = Paint()..filterQuality = quality;
     if (live.floating case final floating?) {
       canvas.saveLayer(bounds, paint);
       if (floating.rest case final rest?) {
-        canvas.drawImage(rest, layer.offset, plain);
+        rest.paint(canvas, layer.offset, plain);
       }
       canvas
         ..transform(floating.matrix)
-        ..drawImage(
-          floating.image,
-          Offset.zero,
-          floating.smooth
-              ? (Paint()..filterQuality = FilterQuality.medium)
-              : plain,
-        )
-        ..restore();
+        // tiles are drawn with hard edges: the clip softens the outline
+        ..clipRect(
+          Offset.zero & floating.part.size,
+          doAntiAlias: floating.smooth,
+        );
+      floating.pixels.paint(
+        canvas,
+        -floating.part.topLeft,
+        floating.smooth
+            ? (Paint()..filterQuality = FilterQuality.medium)
+            : plain,
+      );
+      canvas.restore();
       continue;
     }
     final at = layer.offset + live.shift;
+    canvas.saveLayer(bounds, paint);
+    layer.pixels.paint(canvas, at, plain);
     canvas
-      ..saveLayer(bounds, paint)
-      ..drawImage(layer.image, at, plain)
       ..save()
       ..clipRect(bounds);
     if (live.clip case final clip?) canvas.clipPath(clip);
     if (live.filter case final filter?) {
-      canvas.drawImage(
-        layer.image,
+      layer.pixels.paint(
+        canvas,
         at,
         Paint()
           ..filterQuality = quality

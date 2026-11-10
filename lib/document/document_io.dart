@@ -10,6 +10,7 @@ import '../painting/rgba_image.dart';
 import 'compositor.dart';
 import 'image_document.dart';
 import 'layer.dart';
+import 'tiled_image.dart';
 
 class ImageTooLarge implements Exception {
   const ImageTooLarge();
@@ -74,12 +75,14 @@ Future<LoadedDocument> loadDocument(
           Layer(
             id: index + 1,
             name: source.name.isEmpty ? layerName : source.name,
-            image: empty
-                ? blankImage(1, 1, const ui.Color(0x00000000))
-                : await imageFromPixels(
-                    source.pixels,
-                    source.width,
-                    source.height,
+            pixels: empty
+                ? TiledImage.transparent(1, 1)
+                : TiledImage.fromImage(
+                    await imageFromPixels(
+                      source.pixels,
+                      source.width,
+                      source.height,
+                    ),
                   ),
             offset: ui.Offset(source.left.toDouble(), source.top.toDouble()),
             visible: source.visible,
@@ -110,7 +113,7 @@ Future<LoadedDocument> loadDocument(
   }
   return LoadedDocument(
     DocumentState(image.width, image.height, [
-      Layer(id: 1, name: layerName, image: image),
+      Layer(id: 1, name: layerName, pixels: TiledImage.fromImage(image)),
     ]),
     loss,
   );
@@ -132,12 +135,19 @@ Future<Uint8List> encodeDocument(DocumentState state, SaveFormat format) async {
     }
     final layers = <PsdLayerSource>[];
     for (final layer in state.layers) {
+      final flat = layer.pixels.toImage();
+      final RgbaImage image;
+      try {
+        image = await readPixels(flat);
+      } finally {
+        flat.dispose();
+      }
       layers.add(
         PsdLayerSource(
           name: layer.name,
           left: layer.offset.dx.round(),
           top: layer.offset.dy.round(),
-          image: await readPixels(layer.image),
+          image: image,
           opacity: (layer.opacity * 255).round(),
           blendKey: layer.blend.psdKey,
           visible: layer.visible,

@@ -12,6 +12,10 @@ sealed class Mark {
   /// The area [paint] may reach, in image pixels.
   Rect get bounds;
 
+  /// Whether [paint] may reach inside [area]: a long stroke leaves most of
+  /// its [bounds] alone.
+  bool reaches(Rect area) => bounds.overlaps(area);
+
   void paint(Canvas canvas);
 }
 
@@ -21,6 +25,7 @@ final class PenMark extends Mark {
   PenMark(this.kind, this.color, this.width, this.hardness, Offset start)
     : _last = start,
       _points = Rect.fromPoints(start, start),
+      _stretches = [Rect.fromPoints(start, start)],
       _path = Path()..moveTo(start.dx, start.dy);
 
   final PenKind kind;
@@ -34,18 +39,27 @@ final class PenMark extends Mark {
   final Path _path;
   Offset _last;
   Rect _points;
+
+  /// The box of each stretch between two points of the path.
+  final List<Rect> _stretches;
   var _moved = false;
 
   double get _blur => kind == PenKind.pencil ? 0 : width * (1 - hardness) / 4;
 
   /// The blur fades out about three times its radius away.
+  double get _spread => width / 2 + 3 * _blur + 1;
+
   @override
-  Rect get bounds => _points.inflate(width / 2 + 3 * _blur + 1);
+  Rect get bounds => _points.inflate(_spread);
+
+  @override
+  bool reaches(Rect area) => _stretches.any(area.inflate(_spread).overlaps);
 
   void add(Offset point) {
     if (point == _last) return;
     _path.lineTo(point.dx, point.dy);
     _points = _points.expandToInclude(Rect.fromPoints(point, point));
+    _stretches.add(Rect.fromPoints(_last, point));
     _last = point;
     _moved = true;
   }

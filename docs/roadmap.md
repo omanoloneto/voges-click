@@ -28,7 +28,7 @@ Each phase is a set of releases, not a single one. Inside a phase, the items are
 
 Nothing new to show, but everything after this depends on it.
 
-1. **Large pictures stay fast.** Measure painting, zooming, panning, undo and saving on an 8192 px picture with dozens of layers, and fix what lags: draw only the part of the picture that changed, keep undo steps as the changed region instead of whole layers, and give the undo history a memory budget.
+1. ~~**Large pictures stay fast.** Measure painting, zooming, panning, undo and saving on an 8192 px picture with dozens of layers, and fix what lags: draw only the part of the picture that changed, keep undo steps as the changed region instead of whole layers, and give the undo history a memory budget.~~ Done after 1.1, with [the numbers](performance.md). Saving still takes about 4 s for a picture of that size, and applying an adjustment to a whole layer got slower.
 2. **PSD checked against the real thing.** Open files saved by Photoshop, GIMP, Photopea, Krita and Affinity, and open ours in each of them. Fix what differs.
 3. ~~**Known flaws of 1.0.** A brush click outside the picture creates an empty undo step; Enter in the text dialog adds a line instead of confirming; the adjustment dialogs on small windows.~~ Fixed after 1.1.
 4. **Installers and updater checked on real Windows and Linux machines.**

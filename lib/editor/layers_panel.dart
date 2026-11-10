@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../canvas/editor_controller.dart';
 import '../document/layer.dart';
+import '../document/tile.dart';
 import '../l10n/l10n.dart';
 import 'panel_controls.dart';
 
@@ -280,7 +281,8 @@ class _LayerRow extends StatelessWidget {
 
 /// The layer where it sits in the image, over the transparency checker.
 class _ThumbnailPainter extends CustomPainter {
-  const _ThumbnailPainter(this.layer, this.frame);
+  // a tile that settled is another image: what was painted holds the old
+  _ThumbnailPainter(this.layer, this.frame) : super(repaint: tileSettler);
 
   final Layer layer;
   final Size frame;
@@ -310,23 +312,19 @@ class _ThumbnailPainter extends CustomPainter {
         );
       }
     }
-    final image = layer.image;
-    canvas.drawImageRect(
-      image,
-      Offset.zero & Size(image.width.toDouble(), image.height.toDouble()),
-      Rect.fromLTWH(
-        box.left + layer.offset.dx * scale,
-        box.top + layer.offset.dy * scale,
-        image.width * scale,
-        image.height * scale,
-      ),
+    canvas
+      ..translate(box.left, box.top)
+      ..scale(scale);
+    layer.pixels.paint(
+      canvas,
+      layer.offset,
       Paint()..filterQuality = ui.FilterQuality.medium,
     );
   }
 
   @override
   bool shouldRepaint(_ThumbnailPainter oldDelegate) =>
-      !identical(oldDelegate.layer.image, layer.image) ||
+      !identical(oldDelegate.layer.pixels, layer.pixels) ||
       oldDelegate.layer.offset != layer.offset ||
       oldDelegate.frame != frame;
 }
