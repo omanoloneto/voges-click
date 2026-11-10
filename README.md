@@ -82,6 +82,10 @@ Voges Click reads RGB and grayscale `.psd` files of 8 or 16 bits with their laye
 - Other kinds of PSD (32 bits, CMYK, indexed, `.psb`…) open as a single layer with the finished picture, when the file carries one.
 - A picture can have up to 8192 px per side.
 
+## Roadmap
+
+What comes next, in order of priority, is in [docs/roadmap.md](docs/roadmap.md).
+
 ## Build
 
 Requires [Flutter](https://docs.flutter.dev/get-started/install) 3.41 or newer.
