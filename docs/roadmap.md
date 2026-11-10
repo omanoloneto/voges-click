@@ -33,7 +33,7 @@ Nothing new to show, but everything after this depends on it.
 3. **Known flaws of 1.0.** A brush click outside the picture creates an empty undo step; Enter in the text dialog adds a line instead of confirming; the adjustment dialogs on small windows.
 4. **Installers and updater checked on real Windows and Linux machines.**
 5. **Several pictures open at once**, in tabs, with copy and paste between them.
-6. **Photoshop's keyboard shortcuts** for everything that already exists (`Ctrl+J`, `Ctrl+E`, `Ctrl+D`, `[` and `]` for brush size, `X` and `D` for the colors, space for the hand…).
+6. ~~**Photoshop's keyboard shortcuts** for everything that already exists.~~ Done after 1.0; the README lists the keys.
 
 ## Phase 1: the everyday tools
 
