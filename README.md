@@ -87,7 +87,7 @@ Voges Click reads RGB and grayscale `.psd` files of 8 or 16 bits with their laye
 
 - Groups, masks, layer effects, adjustment layers and editable text are not kept: the layers come as plain pixels, the app says so, and saving asks for a new file, so the original stays as it is.
 - Other kinds of PSD (32 bits, CMYK, indexed, `.psb`…) open as a single layer with the finished picture, when the file carries one.
-- A picture can have up to 8192 px per side.
+- A picture can have up to 8192 px per side. What was measured on one of that size is in [docs/performance.md](docs/performance.md).
 
 ## Roadmap
 

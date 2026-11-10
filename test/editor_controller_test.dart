@@ -9,6 +9,7 @@ import 'package:voges_click/canvas/tool_settings.dart';
 import 'package:voges_click/document/document_io.dart';
 import 'package:voges_click/document/image_document.dart';
 import 'package:voges_click/document/layer.dart';
+import 'package:voges_click/document/tiled_image.dart';
 import 'package:voges_click/painting/image_formats.dart';
 
 import 'support/pixels.dart';
@@ -20,7 +21,7 @@ EditorController _editor({int width = 40, int height = 30}) {
         Layer(
           id: 1,
           name: 'Background',
-          image: blankImage(width, height, white),
+          pixels: TiledImage.filled(width, height, white),
         ),
       ]),
     ),
@@ -65,6 +66,36 @@ void main() {
       controller.redo();
       pixels = await composite(controller.document.state);
       expect(pixels.colorAt(20, 15), 0xFFFF0000);
+    });
+  });
+
+  testWidgets('a long stroke makes again only the tiles it passes through', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor(width: 2048, height: 2048);
+      final was = controller.activeLayer.pixels.tiles.toList();
+      expect(was, hasLength(4));
+      controller.settings
+        ..tool = EditTool.pencil
+        ..size = 4
+        ..color1 = red;
+      // along the top and down the right side
+      controller
+        ..pointerDown(const Offset(100, 100))
+        ..pointerMove(const Offset(1900, 100))
+        ..pointerMove(const Offset(1900, 1900))
+        ..pointerUp();
+
+      final now = controller.activeLayer.pixels.tiles.toList();
+      expect(
+        [for (var i = 0; i < 4; i++) identical(now[i], was[i])],
+        [false, false, true, false],
+      );
+      final pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(1000, 100), 0xFFFF0000);
+      expect(pixels.colorAt(1900, 1000), 0xFFFF0000);
+      expect(pixels.colorAt(500, 1500), 0xFFFFFFFF);
     });
   });
 
@@ -369,6 +400,10 @@ void main() {
       final box = controller.transform!;
       // the box hugs the paint, not the whole transparent layer
       expect(box.box, const Rect.fromLTWH(4, 4, 10, 6));
+      // all of the layer floats: its own pixels are shown, none is copied
+      final floating = controller.live!.floating!;
+      expect(floating.pixels, same(controller.activeLayer.pixels));
+      expect(floating.part.shift(controller.activeLayer.offset), box.box);
 
       _drag(controller, const Offset(8, 6), const Offset(18, 16));
       controller
@@ -472,6 +507,140 @@ void main() {
       controller.setLayerVisible(controller.activeLayer.id, false);
       await controller.beginTransform();
       expect(controller.isTransforming, isFalse);
+    });
+  });
+
+  testWidgets('a stroke makes again only the tiles under it', (tester) async {
+    await tester.runAsync(() async {
+      final controller = _editor(width: 2100, height: 1100);
+      final document = controller.document;
+      final before = document.state;
+      final was = before.layers.single.pixels.tiles.toList();
+      controller.settings
+        ..tool = EditTool.pencil
+        ..size = 4
+        ..color1 = red;
+      _drag(controller, const Offset(1100, 40), const Offset(1300, 40));
+
+      final painted = document.state.layers.single.pixels.tiles.toList();
+      expect(
+        [for (var i = 0; i < 6; i++) identical(painted[i], was[i])],
+        [true, false, true, true, true, true],
+      );
+      var pixels = await composite(document.state);
+      expect(pixels.colorAt(1200, 40), 0xFFFF0000);
+      expect(pixels.colorAt(1200, 60), 0xFFFFFFFF);
+      expect(pixels.colorAt(500, 40), 0xFFFFFFFF);
+
+      controller.undo();
+      expect(document.state, same(before));
+      expect(document.dirty, isFalse);
+      // what was undone waits to be redone
+      expect(painted[1].disposed, isFalse);
+      controller.redo();
+      pixels = await composite(document.state);
+      expect(pixels.colorAt(1200, 40), 0xFFFF0000);
+
+      controller.undo();
+      _drag(controller, const Offset(40, 40), const Offset(60, 40));
+      // another step in its place: nothing holds that tile any more
+      expect(painted[1].disposed, isTrue);
+      expect(was.where((tile) => tile.disposed), isEmpty);
+      pixels = await composite(document.state);
+      expect(pixels.colorAt(50, 40), 0xFFFF0000);
+      expect(pixels.colorAt(1200, 40), 0xFFFFFFFF);
+    });
+  });
+
+  testWidgets('the bucket makes again only the tiles around what it fills', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor(width: 2100, height: 1100);
+      controller.settings.color1 = blue;
+      _selectRect(controller, const Rect.fromLTWH(1100, 100, 50, 50));
+      controller.fillSelection();
+      controller.deselect();
+      final was = controller.activeLayer.pixels.tiles.toList();
+
+      controller.settings.color1 = red;
+      await controller.fillAt(const Offset(1120, 120));
+      final now = controller.activeLayer.pixels.tiles.toList();
+      expect(
+        [for (var i = 0; i < 6; i++) identical(now[i], was[i])],
+        [true, false, true, true, true, true],
+      );
+      final pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(1100, 100), 0xFFFF0000);
+      expect(pixels.colorAt(1149, 149), 0xFFFF0000);
+      expect(pixels.colorAt(1099, 120), 0xFFFFFFFF);
+      expect(pixels.colorAt(1150, 150), 0xFFFFFFFF);
+    });
+  });
+
+  testWidgets('free transform across tiles leaves every step whole', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor(width: 2100, height: 1100);
+      final document = controller.document;
+      final states = [document.state];
+      controller.settings.color1 = red;
+      // on the corner four tiles share
+      _selectRect(controller, const Rect.fromLTWH(1000, 1000, 100, 60));
+      controller.fillSelection();
+      states.add(document.state);
+
+      // lifted from four tiles, it lands on one
+      await controller.beginTransform();
+      controller.nudge(-500, -400);
+      controller.applyTransform();
+      states.add(document.state);
+      var pixels = await composite(document.state);
+      expect(pixels.colorAt(1050, 1030) >>> 24, 0);
+      expect(pixels.colorAt(550, 630), 0xFFFF0000);
+      expect(pixels.colorAt(300, 300), 0xFFFFFFFF);
+
+      await controller.beginTransform();
+      controller.nudge(700, 300);
+      controller.cancel();
+      expect(document.state, same(states[2]));
+
+      // lifted from one tile, it lands on two
+      await controller.beginTransform();
+      controller.nudge(1500, 0);
+      controller.applyTransform();
+      states.add(document.state);
+      pixels = await composite(document.state);
+      expect(pixels.colorAt(550, 630) >>> 24, 0);
+      expect(pixels.colorAt(2040, 630), 0xFFFF0000);
+      expect(pixels.colorAt(2060, 630), 0xFFFF0000);
+      expect(pixels.colorAt(1050, 1030) >>> 24, 0);
+
+      controller.undo();
+      expect(document.state, same(states[2]));
+      pixels = await composite(document.state);
+      expect(pixels.colorAt(550, 630), 0xFFFF0000);
+      expect(pixels.colorAt(2040, 630), 0xFFFFFFFF);
+      controller.undo();
+      expect(document.state, same(states[1]));
+      pixels = await composite(document.state);
+      expect(pixels.colorAt(1050, 1030), 0xFFFF0000);
+      expect(pixels.colorAt(550, 630), 0xFFFFFFFF);
+
+      for (final state in states) {
+        expect(
+          state.layers.single.pixels.tiles.where((tile) => tile.disposed),
+          isEmpty,
+        );
+      }
+      controller
+        ..redo()
+        ..redo();
+      expect(document.state, same(states[3]));
+      pixels = await composite(document.state);
+      expect(pixels.colorAt(2060, 630), 0xFFFF0000);
+      expect(pixels.colorAt(300, 300), 0xFFFFFFFF);
     });
   });
 

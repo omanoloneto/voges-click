@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
-/// The largest side an image may have. Bigger textures fail on some
-/// graphics cards, and every undo step keeps a full copy.
+/// The largest side an image may have. Saving and a few edits still draw
+/// the picture in one piece, and bigger textures fail on some graphics
+/// cards.
 const maxImageSide = 8192;
 
 /// Straight (not premultiplied) RGBA pixels, row by row from the top left.

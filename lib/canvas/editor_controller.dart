@@ -7,9 +7,9 @@ import 'package:flutter/painting.dart';
 import '../document/compositor.dart';
 import '../document/image_document.dart';
 import '../document/layer.dart';
+import '../document/tiled_image.dart';
 import '../painting/flood_fill.dart';
 import '../painting/image_formats.dart';
-import '../painting/opaque_bounds.dart';
 import '../painting/rgba_image.dart';
 import 'free_transform.dart';
 import 'image_ops.dart';
@@ -20,17 +20,39 @@ enum _Combine { replace, add, subtract }
 
 /// The pixels a free transform took off the active layer.
 class _Floating {
-  _Floating(this.piece, this.rest, this.model, this.layerId, this.revision);
+  _Floating(
+    this.piece,
+    this.part,
+    this.rest,
+    this.source,
+    this.model,
+    this.layerId,
+    this.revision,
+  );
 
-  final ui.Image piece;
-  final ui.Image? rest;
+  /// The image the piece is cut from: the pixels of the layer themselves
+  /// when all of it floats, so nothing is copied.
+  final TiledImage piece;
+
+  /// The part of [piece] that floats: what there is to see in it.
+  final Rect part;
+
+  /// The layer without the piece; null when the piece is all it has.
+  final TiledImage? rest;
+
+  /// The pixels of the layer the piece came from.
+  final TiledImage source;
   final FreeTransform model;
   final int layerId;
   final int revision;
 
-  void dispose() {
-    piece.dispose();
-    rest?.dispose();
+  /// [piece] and [rest] share tiles with the layer, and [rest] also with
+  /// [committed], the pixels made from it: only the others are theirs.
+  void dispose({TiledImage? committed}) {
+    final shared = {...source.tiles, ...?committed?.tiles};
+    for (final tile in {...piece.tiles, ...?rest?.tiles}) {
+      if (!shared.contains(tile)) tile.dispose();
+    }
   }
 }
 
@@ -100,7 +122,8 @@ class EditorController extends ChangeNotifier {
       return LivePreview(
         layerId: floating.layerId,
         floating: FloatingPiece(
-          image: floating.piece,
+          pixels: floating.piece,
+          part: floating.part,
           matrix: floating.model.matrix,
           smooth: !floating.model.keepsPixels,
           rest: floating.rest,
@@ -257,7 +280,9 @@ class EditorController extends ChangeNotifier {
       ShapeMark(:final isEmpty) || GradientMark(:final isEmpty) => !isEmpty,
       null => false,
     };
-    if (drawn) _commitPaint(mark!.paint, bounds: mark.bounds);
+    if (drawn) {
+      _commitPaint(mark!.paint, bounds: mark.bounds, reaches: mark.reaches);
+    }
 
     final shift = _moveShift;
     _moveShift = null;
@@ -332,49 +357,33 @@ class EditorController extends ChangeNotifier {
           ? layer.bounds
           : _wholePixels(selection.getBounds()).intersect(layer.bounds);
       if (area.isEmpty) return;
-      final lifted = renderImage(area.width.toInt(), area.height.toInt(), (
-        canvas,
-      ) {
-        canvas.translate(-area.left, -area.top);
-        if (selection != null) canvas.clipPath(selection);
-        canvas.drawImage(layer.image, layer.offset, Paint());
-      });
-      final ui.Image piece;
-      final Rect box;
-      try {
-        final found = await compute(opaqueBounds, await readPixels(lifted));
-        if (found == null || _closed || revision != document.revision) return;
-        final (left, top, right, bottom) = found;
-        final inside = Rect.fromLTRB(
-          left.toDouble(),
-          top.toDouble(),
-          right.toDouble(),
-          bottom.toDouble(),
-        );
-        piece = cropImage(lifted, inside);
-        box = inside.shift(area.topLeft);
-      } finally {
-        lifted.dispose();
+      final piece = selection == null
+          ? layer.pixels
+          : TiledImage.fromImage(
+              renderImage(area.width.toInt(), area.height.toInt(), (canvas) {
+                canvas
+                  ..translate(-area.left, -area.top)
+                  ..clipPath(selection);
+                layer.pixels.paint(canvas, layer.offset, Paint());
+              }),
+            );
+      final part = await piece.opaqueBounds();
+      if (part == null || _closed || revision != document.revision) {
+        if (selection != null) {
+          for (final tile in piece.tiles) {
+            tile.dispose();
+          }
+        }
+        return;
       }
-      final rest = selection == null
-          ? null
-          : renderImage(layer.image.width, layer.image.height, (canvas) {
-              canvas
-                ..drawImage(
-                  layer.image,
-                  Offset.zero,
-                  Paint()..blendMode = BlendMode.src,
-                )
-                ..translate(-layer.offset.dx, -layer.offset.dy)
-                ..clipPath(selection)
-                ..drawPaint(Paint()..blendMode = BlendMode.clear);
-            });
       pointerCancel();
       _crop = null;
       _floating = _Floating(
         piece,
-        rest,
-        FreeTransform(box),
+        part,
+        selection == null ? null : _without(layer, selection, area),
+        layer.pixels,
+        FreeTransform(part.shift(area.topLeft)),
         layer.id,
         revision,
       );
@@ -391,37 +400,60 @@ class EditorController extends ChangeNotifier {
     final model = floating.model;
     if (model.isIdentity) return cancelTransform();
     final layer = activeLayer;
-    var area = _wholePixels(model.bounds);
-    if (floating.rest != null) area = area.expandToInclude(layer.bounds);
-    area = _roomFor(area);
-    final image = renderImage(area.width.toInt(), area.height.toInt(), (
-      canvas,
-    ) {
-      canvas.translate(-area.left, -area.top);
-      if (floating.rest case final rest?) {
-        canvas.drawImage(rest, layer.offset, Paint());
-      }
-      canvas
-        ..transform(model.matrix)
-        ..drawImage(
-          floating.piece,
-          Offset.zero,
-          Paint()
-            ..filterQuality = model.keepsPixels
-                ? FilterQuality.none
-                : FilterQuality.medium,
-        );
-    });
+    final box = _wholePixels(model.bounds);
+    final area = _roomFor(
+      floating.rest == null ? box : box.expandToInclude(layer.bounds),
+    );
+    // only where the piece lands is drawn: the rest of the layer is kept
+    final landing = box.intersect(area);
+    final patch = landing.isEmpty
+        ? null
+        : renderImage(landing.width.toInt(), landing.height.toInt(), (canvas) {
+            canvas.translate(-landing.left, -landing.top);
+            floating.rest?.paint(
+              canvas,
+              layer.offset,
+              Paint()..blendMode = BlendMode.src,
+            );
+            canvas.transform(model.matrix);
+            final part = floating.part;
+            if (model.keepsPixels) {
+              floating.piece.paint(canvas, -part.topLeft, Paint());
+              return;
+            }
+            // in one image: drawn one by one, the tiles would not blend
+            // with each other where they meet
+            final whole = renderImage(
+              part.width.toInt(),
+              part.height.toInt(),
+              (canvas) => floating.piece.paint(canvas, -part.topLeft, Paint()),
+            );
+            canvas.drawImage(
+              whole,
+              Offset.zero,
+              Paint()..filterQuality = FilterQuality.medium,
+            );
+            whole.dispose();
+          });
+    final base =
+        floating.rest ??
+        TiledImage.transparent(layer.pixels.width, layer.pixels.height);
+    final pixels = base.patched(
+      area.shift(-layer.offset),
+      patch: patch,
+      at: landing.topLeft - layer.offset,
+    );
+    patch?.dispose();
     _floating = null;
     if (_selection case final selection?) {
       _setSelection(selection.transform(model.imageMatrix));
     }
     document.commit(
       document.state.replacing(
-        layer.copyWith(image: image, offset: area.topLeft),
+        layer.copyWith(pixels: pixels, offset: area.topLeft),
       ),
     );
-    floating.dispose();
+    floating.dispose(committed: pixels);
   }
 
   void cancelTransform() {
@@ -489,7 +521,7 @@ class EditorController extends ChangeNotifier {
     ) {
       canvas.translate(-area.left, -area.top);
       if (selection != null) canvas.clipPath(selection);
-      canvas.drawImage(layer.image, layer.offset, Paint());
+      layer.pixels.paint(canvas, layer.offset, Paint());
     });
     return (piece, area.topLeft);
   }
@@ -526,7 +558,7 @@ class EditorController extends ChangeNotifier {
     final at = own
         ? _copiedAt
         : Offset(origin.dx.floorToDouble(), origin.dy.floorToDouble());
-    _insertAbove(_newLayer(image, offset: at));
+    _insertAbove(_newLayer(TiledImage.fromImage(image), offset: at));
     return true;
   }
 
@@ -543,7 +575,7 @@ class EditorController extends ChangeNotifier {
       final flat = renderImage(
         document.width,
         document.height,
-        (canvas) => canvas.drawImage(layer.image, layer.offset, Paint()),
+        (canvas) => layer.pixels.paint(canvas, layer.offset, Paint()),
       );
       final RgbaImage pixels;
       try {
@@ -552,7 +584,7 @@ class EditorController extends ChangeNotifier {
         flat.dispose();
       }
       final color = settings.color1.toARGB32();
-      final fill = await compute(_fillLayer, (
+      final fill = await compute(_fillPatch, (
         pixels,
         x,
         y,
@@ -560,11 +592,19 @@ class EditorController extends ChangeNotifier {
         settings.tolerance,
       ));
       if (fill == null || _closed || revision != document.revision) return;
-      final overlay = await imageFromPixels(fill, pixels.width, pixels.height);
+      final overlay = await imageFromPixels(
+        fill.pixels,
+        fill.width,
+        fill.height,
+      );
       if (!_closed && revision == document.revision) {
+        final at = Offset(fill.left.toDouble(), fill.top.toDouble());
         final paint = Paint()
           ..color = Color.fromRGBO(0, 0, 0, settings.opacity);
-        _commitPaint((canvas) => canvas.drawImage(overlay, Offset.zero, paint));
+        _commitPaint(
+          (canvas) => canvas.drawImage(overlay, at, paint),
+          bounds: at & Size(fill.width.toDouble(), fill.height.toDouble()),
+        );
       }
       overlay.dispose();
     } finally {
@@ -650,10 +690,13 @@ class EditorController extends ChangeNotifier {
       DocumentState(width, height, [
         for (final layer in document.layers)
           layer.copyWith(
-            image: scaleImage(
-              layer.image,
-              math.max(1, (layer.image.width * sx).round()),
-              math.max(1, (layer.image.height * sy).round()),
+            pixels: _remade(
+              layer,
+              (image) => scaleImage(
+                image,
+                math.max(1, (image.width * sx).round()),
+                math.max(1, (image.height * sy).round()),
+              ),
             ),
             offset: Offset(
               (layer.offset.dx * sx).roundToDouble(),
@@ -677,7 +720,7 @@ class EditorController extends ChangeNotifier {
         [
           for (final layer in document.layers)
             layer.copyWith(
-              image: turnImage(layer.image, turn),
+              pixels: _remade(layer, (image) => turnImage(image, turn)),
               offset: switch (turn) {
                 Turn.right => Offset(
                   height - layer.bounds.bottom,
@@ -705,14 +748,12 @@ class EditorController extends ChangeNotifier {
   // Layers ----------------------------------------------------------------
 
   void addLayer() {
-    _insertAbove(_newLayer(blankImage(1, 1, const Color(0x00000000))));
+    _insertAbove(_newLayer(TiledImage.transparent(1, 1)));
   }
 
   void duplicateLayer() {
     final layer = activeLayer;
-    _insertAbove(
-      layer.copyWith(id: document.newLayerId(), image: layer.image.clone()),
-    );
+    _insertAbove(layer.copyWith(id: document.newLayerId()));
   }
 
   /// A new layer with the selected part of the active one, or a copy of the
@@ -723,7 +764,7 @@ class EditorController extends ChangeNotifier {
     if (selected == null) return;
     final (piece, at) = selected;
     _selection = null;
-    _insertAbove(_newLayer(piece, offset: at));
+    _insertAbove(_newLayer(TiledImage.fromImage(piece), offset: at));
   }
 
   void deleteLayer() {
@@ -745,25 +786,37 @@ class EditorController extends ChangeNotifier {
     if (index == 0) return;
     final upper = document.layers[index], lower = document.layers[index - 1];
     final area = _roomFor(upper.bounds.expandToInclude(lower.bounds));
-    final image = renderImage(area.width.toInt(), area.height.toInt(), (
-      canvas,
-    ) {
-      canvas.translate(-area.left, -area.top);
-      for (final layer in [lower, upper]) {
-        if (!layer.visible) continue;
-        canvas.drawImage(
-          layer.image,
-          layer.offset,
-          Paint()
-            ..color = Color.fromRGBO(0, 0, 0, layer.opacity)
-            ..blendMode = identical(layer, upper)
-                ? layer.blend.mode
-                : BlendMode.srcOver,
-        );
-      }
-    });
+    // a lower layer shown as it is changes only under the upper one
+    final changed = !lower.visible || lower.opacity < 1
+        ? area
+        : upper.visible
+        ? upper.bounds.intersect(area)
+        : Rect.zero;
+    final patch = changed.isEmpty
+        ? null
+        : renderImage(changed.width.toInt(), changed.height.toInt(), (canvas) {
+            canvas.translate(-changed.left, -changed.top);
+            for (final layer in [lower, upper]) {
+              if (!layer.visible) continue;
+              layer.pixels.paint(
+                canvas,
+                layer.offset,
+                Paint()
+                  ..color = Color.fromRGBO(0, 0, 0, layer.opacity)
+                  ..blendMode = identical(layer, upper)
+                      ? layer.blend.mode
+                      : BlendMode.srcOver,
+              );
+            }
+          });
+    final pixels = lower.pixels.patched(
+      area.shift(-lower.offset),
+      patch: patch,
+      at: changed.topLeft - lower.offset,
+    );
+    patch?.dispose();
     final merged = lower.copyWith(
-      image: image,
+      pixels: pixels,
       offset: area.topLeft,
       opacity: 1,
       visible: true,
@@ -778,14 +831,18 @@ class EditorController extends ChangeNotifier {
   void flatten() {
     final state = document.state;
     if (!state.isLayered) return;
-    final image = renderImage(
-      state.width,
-      state.height,
-      (canvas) => paintLayers(canvas, state),
+    final pixels = TiledImage.fromImage(
+      renderImage(
+        state.width,
+        state.height,
+        (canvas) => paintLayers(canvas, state),
+      ),
     );
     final bottom = state.layers.first;
     document.commit(
-      state.withLayers([Layer(id: bottom.id, name: bottom.name, image: image)]),
+      state.withLayers([
+        Layer(id: bottom.id, name: bottom.name, pixels: pixels),
+      ]),
       activeId: bottom.id,
     );
   }
@@ -874,8 +931,8 @@ class EditorController extends ChangeNotifier {
     _filter = null;
     final layer = activeLayer;
     _commitPaint(
-      (canvas) => canvas.drawImage(
-        layer.image,
+      (canvas) => layer.pixels.paint(
+        canvas,
         layer.offset,
         Paint()
           ..colorFilter = filter
@@ -916,7 +973,7 @@ class EditorController extends ChangeNotifier {
     final firstLine = clean.split('\n').first;
     _insertAbove(
       _newLayer(
-        image,
+        TiledImage.fromImage(image),
         offset: Offset(at.dx.floorToDouble(), at.dy.floorToDouble()),
         name: firstLine.length > 30 ? firstLine.substring(0, 30) : firstLine,
       ),
@@ -943,15 +1000,49 @@ class EditorController extends ChangeNotifier {
   }
 
   Layer _newLayer(
-    ui.Image image, {
+    TiledImage pixels, {
     Offset offset = Offset.zero,
     String? name,
   }) => Layer(
     id: document.newLayerId(),
     name: name ?? layerName(++_layersAdded),
-    image: image,
+    pixels: pixels,
     offset: offset,
   );
+
+  /// The pixels of [layer] after [change], which takes them in one piece.
+  static TiledImage _remade(
+    Layer layer,
+    ui.Image Function(ui.Image image) change,
+  ) {
+    final whole = layer.pixels.toImage();
+    final pixels = TiledImage.fromImage(change(whole));
+    whole.dispose();
+    return pixels;
+  }
+
+  /// The pixels of [layer] with nothing left inside [selection], all of
+  /// which [area] holds.
+  static TiledImage _without(Layer layer, Path selection, Rect area) {
+    final hole = renderImage(area.width.toInt(), area.height.toInt(), (canvas) {
+      canvas.translate(-area.left, -area.top);
+      layer.pixels.paint(
+        canvas,
+        layer.offset,
+        Paint()..blendMode = BlendMode.src,
+      );
+      canvas
+        ..clipPath(selection)
+        ..drawPaint(Paint()..blendMode = BlendMode.clear);
+    });
+    final pixels = layer.pixels.patched(
+      Offset.zero & layer.bounds.size,
+      patch: hole,
+      at: area.topLeft - layer.offset,
+    );
+    hole.dispose();
+    return pixels;
+  }
 
   void _insertAbove(Layer layer) {
     final layers = [...document.layers]
@@ -961,8 +1052,14 @@ class EditorController extends ChangeNotifier {
 
   /// One undo step: the active layer with [draw] painted on it, inside the
   /// image and the selection. [bounds] is how far [draw] reaches, when that
-  /// is not everywhere: paint that cannot show makes no step.
-  void _commitPaint(void Function(Canvas canvas) draw, {Rect? bounds}) {
+  /// is not everywhere: paint that cannot show makes no step, and only the
+  /// part of the layer it reaches is made again. [reaches] tells which
+  /// areas of the image inside [bounds] it does reach, when not all.
+  void _commitPaint(
+    void Function(Canvas canvas) draw, {
+    Rect? bounds,
+    bool Function(Rect area)? reaches,
+  }) {
     if (!canPaint) return;
     final layer = activeLayer;
     final selection = _selection;
@@ -970,24 +1067,33 @@ class EditorController extends ChangeNotifier {
     if (selection != null) reach = reach.intersect(selection.getBounds());
     if (bounds != null) reach = reach.intersect(bounds);
     if (reach.isEmpty) return;
-    final area = _roomFor(layer.bounds.expandToInclude(imageRect));
-    final image = renderImage(area.width.toInt(), area.height.toInt(), (
+    final painted = _wholePixels(reach).intersect(imageRect);
+    final patch = renderImage(painted.width.toInt(), painted.height.toInt(), (
       canvas,
     ) {
-      canvas
-        ..translate(-area.left, -area.top)
-        ..drawImage(
-          layer.image,
-          layer.offset,
-          Paint()..blendMode = BlendMode.src,
-        )
-        ..clipRect(imageRect);
+      canvas.translate(-painted.left, -painted.top);
+      layer.pixels.paint(
+        canvas,
+        layer.offset,
+        Paint()..blendMode = BlendMode.src,
+      );
+      canvas.clipRect(imageRect);
       if (selection != null) canvas.clipPath(selection);
       draw(canvas);
     });
+    final area = _roomFor(layer.bounds.expandToInclude(imageRect));
+    final pixels = layer.pixels.patched(
+      area.shift(-layer.offset),
+      patch: patch,
+      at: painted.topLeft - layer.offset,
+      changes: reaches == null
+          ? null
+          : (tile) => reaches(tile.shift(area.topLeft)),
+    );
+    patch.dispose();
     document.commit(
       document.state.replacing(
-        layer.copyWith(image: image, offset: area.topLeft),
+        layer.copyWith(pixels: pixels, offset: area.topLeft),
       ),
     );
   }
@@ -1127,7 +1233,7 @@ class EditorController extends ChangeNotifier {
   }
 }
 
-Uint8List? _fillLayer((RgbaImage, int, int, int, int) request) {
+FillPatch? _fillPatch((RgbaImage, int, int, int, int) request) {
   final (image, x, y, color, tolerance) = request;
-  return fillLayer(image, x, y, color, tolerance: tolerance);
+  return fillPatch(image, x, y, color, tolerance: tolerance);
 }

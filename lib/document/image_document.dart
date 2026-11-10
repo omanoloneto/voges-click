@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../painting/image_formats.dart';
 import 'layer.dart';
+import 'tile.dart';
+import 'tiled_image.dart';
 
 /// The size of the image and its layers, bottom first. Never changed in
 /// place: every edit makes a new one, and the old one is an undo step.
@@ -42,7 +44,8 @@ class ImageDocument extends ChangeNotifier {
     _nextId = _highestId(state) + 1;
   }
 
-  /// Memory the undo steps may take; the oldest go first, but one is kept.
+  /// Memory the undo steps may take on top of the image itself; the oldest
+  /// go first, but one is kept.
   static const defaultHistoryBytes = 1024 << 20;
 
   final int historyBytes;
@@ -160,8 +163,8 @@ class ImageDocument extends ChangeNotifier {
 
   @override
   void dispose() {
-    for (final image in _imagesOf([..._undo, ..._redo, _state])) {
-      image.dispose();
+    for (final tile in _tilesOf([..._undo, ..._redo, _state])) {
+      tile.dispose();
     }
     super.dispose();
   }
@@ -175,29 +178,37 @@ class ImageDocument extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A step costs only the tiles the image no longer shows: the ones it
+  /// shares with the image take no memory of their own.
   void _trim(List<DocumentState> dropped) {
-    int bytes() => _imagesOf(
+    final shown = _tilesOf([_state]);
+    int bytes() => _tilesOf(
       _undo,
-    ).fold(0, (sum, image) => sum + image.width * image.height * 4);
+    ).difference(shown).fold(0, (sum, tile) => sum + tile.bytes);
     while (_undo.length > 1 && bytes() > historyBytes) {
       dropped.add(_undo.removeAt(0));
     }
   }
 
-  /// Steps share the images of the layers they did not touch, so an image
-  /// goes away only when no remaining step holds it.
+  /// Steps share the tiles they did not touch, so a tile goes away only
+  /// when no remaining step holds it.
   void _disposeUnused(List<DocumentState> dropped) {
     if (dropped.isEmpty) return;
-    final kept = _imagesOf([..._undo, ..._redo, _state]);
-    for (final image in _imagesOf(dropped)) {
-      if (!kept.contains(image)) image.dispose();
+    final kept = _tilesOf([..._undo, ..._redo, _state]);
+    for (final tile in _tilesOf(dropped)) {
+      if (!kept.contains(tile)) tile.dispose();
     }
   }
 
-  static Set<ui.Image> _imagesOf(Iterable<DocumentState> states) => {
-    for (final state in states)
-      for (final layer in state.layers) layer.image,
-  }.toSet();
+  static Set<Tile> _tilesOf(Iterable<DocumentState> states) {
+    // most layers of most steps are the very same pixels
+    final seen = Set<TiledImage>.identity();
+    return {
+      for (final state in states)
+        for (final layer in state.layers)
+          if (seen.add(layer.pixels)) ...layer.pixels.tiles,
+    };
+  }
 
   static int _highestId(DocumentState state) => state.layers.fold(
     0,

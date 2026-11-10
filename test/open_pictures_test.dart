@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:voges_click/canvas/image_ops.dart';
 import 'package:voges_click/canvas/tool_settings.dart';
 import 'package:voges_click/document/image_document.dart';
 import 'package:voges_click/document/layer.dart';
+import 'package:voges_click/document/tiled_image.dart';
 import 'package:voges_click/editor/open_pictures.dart';
 import 'package:voges_click/painting/image_formats.dart';
 
@@ -23,7 +23,11 @@ OpenPicture _open(OpenPictures pictures, String path, {int layers = 1}) =>
     pictures.open(
       DocumentState(20, 10, [
         for (var id = 1; id <= layers; id++)
-          Layer(id: id, name: 'Layer $id', image: blankImage(20, 10, blue)),
+          Layer(
+            id: id,
+            name: 'Layer $id',
+            pixels: TiledImage.filled(20, 10, blue),
+          ),
       ]),
       name: path.split('/').last,
       path: path,
@@ -142,13 +146,13 @@ void main() {
     final second = pictures.addBlank(10, 10);
     final third = pictures.addBlank(10, 10);
     final fourth = pictures.addBlank(10, 10);
-    final image = second.document.layers.single.image;
+    final tile = second.document.layers.single.pixels.tiles.single;
 
     pictures.activate(second);
     pictures.close(second);
     expect(pictures.pictures, [first, third, fourth]);
     expect(pictures.active, same(third));
-    expect(image.debugDisposed, isTrue);
+    expect(tile.disposed, isTrue);
     expect(() => second.controller.addListener(() {}), throwsFlutterError);
 
     // one that is not in front goes away without changing what is shown
@@ -299,8 +303,8 @@ void main() {
       // a new layer with those pixels, where the other picture asked for
       expect(to.document.layers, hasLength(2));
       expect(to.controller.activeLayer.offset, const Offset(3, 4));
-      expect(to.controller.activeLayer.image.width, 8);
-      expect(to.controller.activeLayer.image.height, 6);
+      expect(to.controller.activeLayer.pixels.width, 8);
+      expect(to.controller.activeLayer.pixels.height, 6);
       final pixels = await composite(to.document.state);
       expect(pixels.colorAt(4, 5), 0xFFFF0000);
       expect(pixels.colorAt(10, 9), 0xFFFF0000);

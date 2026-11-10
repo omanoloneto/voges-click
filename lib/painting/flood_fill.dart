@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'rgba_image.dart';
@@ -7,31 +8,47 @@ import 'rgba_image.dart';
 /// not to leak between the colors of the palette.
 const fillTolerance = 64;
 
-/// A layer with [argb] on the area connected to (x, y), in four directions,
-/// whose colors are within [tolerance] of the color at (x, y), and
-/// transparent elsewhere. Null when (x, y) is outside the image.
+/// What a fill paints: [pixels] has the color on the filled area and is
+/// transparent elsewhere. It is only the part of the image that holds the
+/// area, [width] by [height] pixels from [left], [top].
+typedef FillPatch = ({
+  Uint8List pixels,
+  int left,
+  int top,
+  int width,
+  int height,
+});
+
+/// [argb] on the area connected to (x, y), in four directions, whose colors
+/// are within [tolerance] of the color at (x, y). Null when (x, y) is
+/// outside the image.
 ///
-/// [argb] must be opaque: the layer is drawn as is over the image.
-Uint8List? fillLayer(
+/// [argb] must be opaque: the patch is drawn as is over the image.
+FillPatch? fillPatch(
   RgbaImage image,
   int x,
   int y,
   int argb, {
   int tolerance = fillTolerance,
 }) {
-  final mask = fillMask(image, x, y, tolerance: tolerance);
-  if (mask == null) return null;
-  final layer = Uint8List(mask.length * 4);
+  final area = _fill(image, x, y, tolerance);
+  if (area == null) return null;
+  final (mask, left, top, right, bottom) = area;
+  final width = right - left + 1, height = bottom - top + 1;
+  final pixels = Uint8List(width * height * 4);
   final r = argb >> 16 & 0xFF, g = argb >> 8 & 0xFF, b = argb & 0xFF;
-  for (var i = 0; i < mask.length; i++) {
-    if (mask[i] == 0) continue;
-    final p = i * 4;
-    layer[p] = r;
-    layer[p + 1] = g;
-    layer[p + 2] = b;
-    layer[p + 3] = 255;
+  for (var row = 0; row < height; row++) {
+    var m = (top + row) * image.width + left;
+    var p = row * width * 4;
+    for (var column = 0; column < width; column++, m++, p += 4) {
+      if (mask[m] == 0) continue;
+      pixels[p] = r;
+      pixels[p + 1] = g;
+      pixels[p + 2] = b;
+      pixels[p + 3] = 255;
+    }
   }
-  return layer;
+  return (pixels: pixels, left: left, top: top, width: width, height: height);
 }
 
 /// One byte per pixel: 1 where the fill reaches.
@@ -40,7 +57,15 @@ Uint8List? fillMask(
   int x,
   int y, {
   int tolerance = fillTolerance,
-}) {
+}) => _fill(image, x, y, tolerance)?.$1;
+
+/// The mask of the fill and the first and last column and row it reaches.
+(Uint8List, int, int, int, int)? _fill(
+  RgbaImage image,
+  int x,
+  int y,
+  int tolerance,
+) {
   if (!image.contains(x, y)) return null;
   final width = image.width, height = image.height;
   final pixels = image.pixels;
@@ -61,6 +86,7 @@ Uint8List? fillMask(
         (a - ta).abs() <= tolerance;
   }
 
+  var first = x, last = x, top = y, bottom = y;
   final seeds = <int>[y * width + x];
   while (seeds.isNotEmpty) {
     final seed = seeds.removeLast();
@@ -75,6 +101,10 @@ Uint8List? fillMask(
       right++;
     }
     mask.fillRange(left, right + 1, 1);
+    first = math.min(first, left - rowStart);
+    last = math.max(last, right - rowStart);
+    top = math.min(top, row);
+    bottom = math.max(bottom, row);
     for (final next in [row - 1, row + 1]) {
       if (next < 0 || next >= height) continue;
       final offset = (next - row) * width;
@@ -87,5 +117,5 @@ Uint8List? fillMask(
       }
     }
   }
-  return mask;
+  return (mask, first, top, last, bottom);
 }
