@@ -14,7 +14,7 @@ const toolKeys = {
   EditTool.crop: 'C',
   EditTool.picker: 'I',
   EditTool.brush: 'B',
-  EditTool.pencil: 'N',
+  EditTool.pencil: 'B',
   EditTool.eraser: 'E',
   EditTool.fill: 'G',
   EditTool.gradient: 'G',

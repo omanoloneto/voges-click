@@ -29,6 +29,14 @@ enum EditTool {
 
   bool get usesSize => isPen || isShape;
 
+  /// Alt turns these into the color picker for one click.
+  bool get picksWithAlt =>
+      this == brush ||
+      this == pencil ||
+      this == fill ||
+      this == gradient ||
+      isShape;
+
   bool get usesOpacity => isPen || isShape || this == fill || this == gradient;
 }
 

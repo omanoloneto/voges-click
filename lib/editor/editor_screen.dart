@@ -6,14 +6,12 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:voges_updater/voges_updater.dart'
     show LaunchResult, UpdateCheck, UpdateStatusChip, UpdaterLocalizations;
 import 'package:window_manager/window_manager.dart';
 
 import '../canvas/canvas_view.dart';
 import '../canvas/editor_controller.dart';
-import '../canvas/tool_settings.dart';
 import '../canvas/zoom.dart';
 import '../document/document_io.dart';
 import '../document/layer.dart';
@@ -35,9 +33,9 @@ import 'file_panel.dart';
 import 'layers_panel.dart';
 import 'options_bar.dart';
 import 'panel_controls.dart';
+import 'shortcuts.dart';
 import 'status_bar.dart';
 import 'tool_bar.dart';
-import 'tool_catalog.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({
@@ -438,70 +436,23 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
     ),
   );
 
-  void _pickTool(String key) {
-    final settings = controller.settings;
-    if (toolForKey(key, settings.tool) case final tool?) settings.tool = tool;
-  }
-
-  void _nudge(int dx, int dy) {
-    if (controller.settings.tool == EditTool.move) controller.nudge(dx, dy);
-  }
-
-  void _growBrush(int direction) {
-    final settings = controller.settings;
-    final step = math.max(1.0, (settings.size * 0.15).roundToDouble());
-    settings.size += direction * step;
-  }
-
-  Map<ShortcutActivator, VoidCallback> get _shortcuts {
-    final settings = controller.settings;
-    return {
-      shortcut(LogicalKeyboardKey.keyN): _newImage,
-      shortcut(LogicalKeyboardKey.keyO): _open,
-      shortcut(LogicalKeyboardKey.keyS): _save,
-      shortcut(LogicalKeyboardKey.keyS, shift: true): () =>
-          _saveAs(controller.document.format),
-      shortcut(LogicalKeyboardKey.keyZ): controller.undo,
-      shortcut(LogicalKeyboardKey.keyZ, shift: true): controller.redo,
-      shortcut(LogicalKeyboardKey.keyY): controller.redo,
-      shortcut(LogicalKeyboardKey.keyC): _copy,
-      shortcut(LogicalKeyboardKey.keyX): _cut,
-      shortcut(LogicalKeyboardKey.keyV): _paste,
-      shortcut(LogicalKeyboardKey.keyA): controller.selectAll,
-      shortcut(LogicalKeyboardKey.keyD): controller.deselect,
-      shortcut(LogicalKeyboardKey.equal): () => _stepZoom(1),
-      shortcut(LogicalKeyboardKey.minus): () => _stepZoom(-1),
-      shortcut(LogicalKeyboardKey.digit0): () => _setZoom(1),
-      const SingleActivator(LogicalKeyboardKey.delete):
-          controller.deleteSelection,
-      const SingleActivator(LogicalKeyboardKey.backspace):
-          controller.deleteSelection,
-      const SingleActivator(LogicalKeyboardKey.enter): controller.applyCrop,
-      const SingleActivator(LogicalKeyboardKey.escape): controller.deselect,
-      for (final key in toolKeys.values.toSet())
-        SingleActivator(_letters[key]!): () => _pickTool(key),
-      const SingleActivator(LogicalKeyboardKey.keyX): settings.swapColors,
-      const SingleActivator(LogicalKeyboardKey.keyD): settings.resetColors,
-      const CharacterActivator('['): () => _growBrush(-1),
-      const CharacterActivator(']'): () => _growBrush(1),
-      for (final (key, dx, dy) in _arrows) ...{
-        SingleActivator(key): () => _nudge(dx, dy),
-        SingleActivator(key, shift: true): () => _nudge(dx * 10, dy * 10),
-      },
-    };
-  }
-
-  static final _letters = {
-    for (final key in LogicalKeyboardKey.knownLogicalKeys)
-      if (key.keyLabel.length == 1) key.keyLabel: key,
-  };
-
-  static const _arrows = [
-    (LogicalKeyboardKey.arrowLeft, -1, 0),
-    (LogicalKeyboardKey.arrowRight, 1, 0),
-    (LogicalKeyboardKey.arrowUp, 0, -1),
-    (LogicalKeyboardKey.arrowDown, 0, 1),
-  ];
+  Map<ShortcutActivator, VoidCallback> get _shortcuts => editorShortcuts(
+    controller,
+    ShortcutActions(
+      newImage: _newImage,
+      open: _open,
+      save: _save,
+      saveAs: () => _saveAs(controller.document.format),
+      copy: _copy,
+      cut: _cut,
+      paste: _paste,
+      stepZoom: _stepZoom,
+      actualSize: () => _setZoom(1),
+      fit: _fit,
+      resize: _resize,
+      adjust: _adjust,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {

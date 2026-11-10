@@ -36,6 +36,44 @@ Voges Click checks for a new version every time it opens and says in the status 
 - Zoom and hand tools, and the zoom and picture size in the status bar.
 - Interface in English, Portuguese and Spanish. It follows the system language, and you can pick another one in the File menu.
 
+### Keyboard shortcuts
+
+The keys are the ones Photoshop uses for the same things. `Ctrl` is `⌘` and `Alt` is `⌥` on macOS.
+
+| Keys | What they do |
+| --- | --- |
+| `V` `M` `L` `C` `I` `B` `E` `G` `T` `U` `H` `Z` | Pick a tool. Tools that share a key take turns, with or without `Shift` |
+| `X`, `D` | Swap the two colors, back to black and white |
+| `[`, `]` | Smaller and larger brush |
+| `{`, `}` | Softer and harder brush |
+| `1`…`9`, `0` | Opacity of the tool from 10% to 100%, or of the layer when the tool has none |
+| `Alt` + click | Pick a color while painting |
+| `Space` + drag | Move around the picture |
+| `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S` | New, open, save, save as |
+| `Ctrl+Z`, `Ctrl+Alt+Z` | Undo |
+| `Ctrl+Shift+Z`, `Ctrl+Y` | Redo |
+| `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | Copy, cut, paste |
+| `Ctrl+A`, `Ctrl+D`, `Ctrl+Shift+I` | Select all, deselect, invert the selection |
+| `Delete` | Erase what is selected |
+| `Alt+Delete`, `Shift+F5` | Fill with the foreground color |
+| `Ctrl+Delete` | Fill with the background color |
+| `Enter`, `Esc` | Apply the crop, cancel it |
+| `Ctrl+Shift+N` | New layer |
+| `Ctrl+J` | New layer with what is selected, or a copy of the layer |
+| `Ctrl+E` | Merge the layer into the one below |
+| `Ctrl+]`, `Ctrl+[` | Layer up, layer down |
+| `Ctrl+Shift+]`, `Ctrl+Shift+[` | Layer to the top, to the bottom |
+| `Alt+]`, `Alt+[` | Go to the layer above, below |
+| `Ctrl+,` | Show or hide the layer |
+| Arrows, `Shift` + arrows | With the move tool, move the layer by 1 px, by 10 px |
+| `Ctrl+Alt+I` | Resize the picture |
+| `Ctrl+U` | Hue and saturation |
+| `Ctrl+I`, `Ctrl+Shift+U` | Invert the colors, grayscale |
+| `Ctrl++`, `Ctrl+-` | Zoom in, zoom out |
+| `Ctrl+0`, `Ctrl+1` | Fit the picture in the window, 100% |
+
+`Delete` is also the Backspace key.
+
 ### PSD files
 
 Voges Click reads RGB and grayscale `.psd` files of 8 or 16 bits with their layers (name, position, opacity, blend mode and visibility) and writes 8-bit RGB ones.

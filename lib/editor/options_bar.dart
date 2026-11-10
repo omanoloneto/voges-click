@@ -70,7 +70,11 @@ class OptionsBar extends StatelessWidget {
     final selected = c.hasSelection;
     return [
       _Menu(l10n.menuImage, [
-        _item(l10n.resizeImage, actions.resize),
+        _item(
+          l10n.resizeImage,
+          actions.resize,
+          keys: shortcutLabel('I', alt: true),
+        ),
         _item(l10n.cropToSelection, selected ? c.cropToSelection : null),
         const Divider(color: RibbonColors.divider),
         _item(l10n.rotateLeft, () => c.turn(Turn.left)),
@@ -81,14 +85,26 @@ class OptionsBar extends StatelessWidget {
         _item(l10n.flattenImage, layers > 1 ? c.flatten : null),
       ]),
       _Menu(l10n.menuLayer, [
-        _item(l10n.newLayer, c.addLayer),
-        _item(l10n.duplicateLayer, c.duplicateLayer),
+        _item(l10n.newLayer, c.addLayer, keys: shortcutLabel('N', shift: true)),
+        _item(l10n.duplicateLayer, c.duplicateLayer, keys: shortcutLabel('J')),
         _item(l10n.deleteLayer, layers > 1 ? c.deleteLayer : null),
         _item(l10n.renameLayer, actions.renameLayer),
         const Divider(color: RibbonColors.divider),
-        _item(l10n.mergeDown, c.canMergeDown ? c.mergeDown : null),
-        _item(l10n.raiseLayer, index < layers - 1 ? c.raiseLayer : null),
-        _item(l10n.lowerLayer, index > 0 ? c.lowerLayer : null),
+        _item(
+          l10n.mergeDown,
+          c.canMergeDown ? c.mergeDown : null,
+          keys: shortcutLabel('E'),
+        ),
+        _item(
+          l10n.raiseLayer,
+          index < layers - 1 ? c.raiseLayer : null,
+          keys: shortcutLabel(']'),
+        ),
+        _item(
+          l10n.lowerLayer,
+          index > 0 ? c.lowerLayer : null,
+          keys: shortcutLabel('['),
+        ),
       ]),
       _Menu(l10n.menuSelect, [
         _item(l10n.selectAll, c.selectAll, keys: shortcutLabel('A')),
@@ -97,10 +113,22 @@ class OptionsBar extends StatelessWidget {
           selected ? c.deselect : null,
           keys: shortcutLabel('D'),
         ),
-        _item(l10n.invertSelection, selected ? c.invertSelection : null),
+        _item(
+          l10n.invertSelection,
+          selected ? c.invertSelection : null,
+          keys: shortcutLabel('I', shift: true),
+        ),
         const Divider(color: RibbonColors.divider),
-        _item(l10n.fillSelection, c.canPaint ? c.fillSelection : null),
-        _item(l10n.deleteSelection, c.canPaint ? c.deleteSelection : null),
+        _item(
+          l10n.fillSelection,
+          c.canPaint ? c.fillSelection : null,
+          keys: shortcutLabel(_eraseKey, alt: true, command: false),
+        ),
+        _item(
+          l10n.deleteSelection,
+          c.canPaint ? c.deleteSelection : null,
+          keys: _eraseKey,
+        ),
       ]),
       _Menu(l10n.menuAdjustments, [
         _item(
@@ -110,15 +138,18 @@ class OptionsBar extends StatelessWidget {
         _item(
           l10n.hueSaturation,
           () => actions.adjust(Adjustment.hueSaturation),
+          keys: shortcutLabel('U'),
         ),
         const Divider(color: RibbonColors.divider),
         _item(
           l10n.invertColors,
           () => c.applyFilter(const ColorFilter.matrix(invertMatrix)),
+          keys: shortcutLabel('I'),
         ),
         _item(
           l10n.grayscale,
           () => c.applyFilter(ColorFilter.matrix(saturationMatrix(-1))),
+          keys: shortcutLabel('U', shift: true),
         ),
       ]),
     ];
@@ -208,6 +239,8 @@ class OptionsBar extends StatelessWidget {
         ),
     ];
   }
+
+  static String get _eraseKey => isApplePlatform ? '⌫' : 'Del';
 
   static Widget _item(String label, VoidCallback? onPressed, {String? keys}) {
     return MenuItemButton(
