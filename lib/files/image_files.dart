@@ -27,14 +27,15 @@ class FileDialogTitles {
 class ImageFiles {
   FileDialogTitles titles = const FileDialogTitles();
 
-  Future<OpenedFile?> pick() async {
+  /// The paths of the files the user chose; none if canceled.
+  Future<List<String>> pick() async {
     final result = await FilePicker.pickFiles(
       dialogTitle: titles.open,
       type: FileType.custom,
       allowedExtensions: openableExtensions,
+      allowMultiple: true,
     );
-    final path = result?.files.single.path;
-    return path == null ? null : read(path);
+    return [...?result?.paths.nonNulls];
   }
 
   Future<OpenedFile> read(String path) async => OpenedFile(

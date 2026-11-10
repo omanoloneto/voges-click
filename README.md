@@ -25,6 +25,7 @@ Voges Click checks for a new version every time it opens and says in the status 
 ## What it does
 
 - **Layout:** the tools on the left, the options of the current tool on top, the color and the layers panels on the right, the picture in the middle.
+- **Tabs:** several pictures open at once, each in its tab above the canvas, with its own zoom, place and undo history. What is copied in one picture can be pasted in another, and closing a picture with unsaved changes asks first.
 - **Layers:** add, duplicate, rename, delete, hide and reorder layers, merge a layer into the one below and flatten the picture. Each layer has its opacity and one of 17 blend modes (multiply, screen, overlay, soft light, difference, hue, color, luminosity…).
 - **Painting:** brush with size, hardness and opacity, pencil, eraser, paint bucket with tolerance, gradient, line, rectangle and ellipse, and text with size and bold. Foreground and background colors, with a color picker tool.
 - **Selecting:** rectangle, ellipse and lasso. Painting stays inside the selection; invert it, fill it, copy, cut and paste it as a new layer, or crop the picture to it.
@@ -33,7 +34,7 @@ Voges Click checks for a new version every time it opens and says in the status 
 - **Picture:** crop, resize, rotate and flip.
 - **Adjustments:** brightness and contrast, hue and saturation (both with a live preview), invert colors and grayscale, on the active layer.
 - **Editing:** undo and redo for every change.
-- **Files:** opens `.psd`, PNG, JPEG, BMP, GIF, WebP, TIFF, TGA and ICO, and saves `.psd` (with the layers), PNG, JPEG and BMP. It also opens files from the system's "Open with", without becoming the default app.
+- **Files:** opens `.psd`, PNG, JPEG, BMP, GIF, WebP, TIFF, TGA and ICO, and saves `.psd` (with the layers), PNG, JPEG and BMP. Open takes several files at once, each in its tab. It also opens files from the system's "Open with", without becoming the default app.
 - Zoom and hand tools, and the zoom and picture size in the status bar.
 - Interface in English, Portuguese and Spanish. It follows the system language, and you can pick another one in the File menu.
 
@@ -51,6 +52,8 @@ The keys are the ones Photoshop uses for the same things. `Ctrl` is `⌘` and `A
 | `Alt` + click | Pick a color while painting |
 | `Space` + drag | Move around the picture |
 | `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S` | New, open, save, save as |
+| `Ctrl+W` | Close the picture |
+| `Ctrl+Tab`, `Ctrl+Shift+Tab` | Next picture, previous picture. These two are `Ctrl` on macOS too |
 | `Ctrl+Z`, `Ctrl+Alt+Z` | Undo |
 | `Ctrl+Shift+Z`, `Ctrl+Y` | Redo |
 | `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | Copy, cut, paste |

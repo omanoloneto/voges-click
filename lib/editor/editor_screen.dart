@@ -31,15 +31,17 @@ import 'color_panel.dart';
 import 'dialogs.dart';
 import 'file_panel.dart';
 import 'layers_panel.dart';
+import 'open_pictures.dart';
 import 'options_bar.dart';
 import 'panel_controls.dart';
+import 'picture_tabs.dart';
 import 'shortcuts.dart';
 import 'status_bar.dart';
 import 'tool_bar.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({
-    required this.controller,
+    required this.pictures,
     required this.files,
     required this.clipboard,
     required this.systemOpen,
@@ -50,7 +52,7 @@ class EditorScreen extends StatefulWidget {
     super.key,
   });
 
-  final EditorController controller;
+  final OpenPictures pictures;
   final ImageFiles files;
   final ImageClipboard clipboard;
   final SystemOpen systemOpen;
@@ -67,24 +69,33 @@ class EditorScreen extends StatefulWidget {
 
 class _EditorScreenState extends State<EditorScreen> with WindowListener {
   final _focus = FocusNode(debugLabel: 'canvas');
-  final _canvas = GlobalKey<CanvasViewState>();
   late final AppLifecycleListener _lifecycle;
-  var _zoom = 1.0;
+  late OpenPicture _titled;
+  var _opening = Future<void>.value();
   var _closing = false;
   var _maximized = false;
   var _fullScreen = false;
   String? _title;
 
-  EditorController get controller => widget.controller;
+  OpenPictures get pictures => widget.pictures;
+
+  /// The picture in front.
+  OpenPicture get _picture => pictures.active;
+
+  /// Of the picture in front. What waits for a dialog keeps the one it
+  /// started with: a file opened meanwhile changes the picture in front.
+  EditorController get controller => _picture.controller;
 
   @override
   void initState() {
     super.initState();
-    controller.document.addListener(_updateTitle);
+    pictures.addListener(_onPictures);
+    _titled = _picture;
+    _titled.document.addListener(_updateTitle);
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     if (isDesktopPlatform) windowManager.addListener(this);
-    widget.systemOpen.listen(_openFromSystem);
-    _fitAfterLoad();
+    widget.systemOpen.listen((file) => _inTurn(() => _load(file)));
+    _fitAfterLoad(_picture);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _updateTitle();
       if (widget.updates case final updates?) {
@@ -92,7 +103,9 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
         updates.cleanUp().ignore();
       }
       final pending = await widget.systemOpen.pending(widget.launchArguments);
-      if (pending.isNotEmpty) _load(pending.first);
+      for (final file in pending) {
+        _inTurn(() => _load(file));
+      }
     });
   }
 
@@ -104,39 +117,60 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
       open: l10n.openImageTitle,
       save: l10n.saveImageTitle,
     );
-    controller.layerName = (number) =>
-        number == 1 ? l10n.backgroundLayer : l10n.layerNumber(number);
+    pictures.layerName = l10n.layerNamed;
     _updateTitle();
   }
 
   @override
   void dispose() {
-    controller.document.removeListener(_updateTitle);
+    pictures.removeListener(_onPictures);
+    _titled.document.removeListener(_updateTitle);
     _lifecycle.dispose();
     if (isDesktopPlatform) windowManager.removeListener(this);
     _focus.dispose();
     super.dispose();
   }
 
-  String get _name => controller.document.name ?? context.l10n.untitled;
+  /// The title follows the picture in front.
+  void _onPictures() {
+    if (!identical(_picture, _titled)) {
+      _titled.document.removeListener(_updateTitle);
+      _titled = _picture;
+      _titled.document.addListener(_updateTitle);
+    }
+    _updateTitle();
+    setState(() {});
+  }
+
+  bool _isOpen(OpenPicture picture) =>
+      mounted && pictures.pictures.contains(picture);
+
+  String _nameOf(OpenPicture picture) =>
+      picture.document.name ?? context.l10n.untitled;
+
+  String get _name => _nameOf(_picture);
 
   void _updateTitle() {
     if (!mounted) return;
-    final dirty = controller.document.dirty;
+    final dirty = _picture.document.dirty;
     final title = '${dirty ? '• ' : ''}$_name — Voges Click';
     if (title == _title) return;
     _title = title;
     if (isDesktopPlatform) windowManager.setTitle(title).ignore();
   }
 
+  /// Files open one after the other, in the order they were asked for.
+  Future<void> _inTurn(Future<void> Function() open) =>
+      _opening = _opening.whenComplete(() => mounted ? open() : null);
+
   Future<ui.AppExitResponse> _onExitRequested() async {
-    if (_closing || await _confirmDiscard()) return ui.AppExitResponse.exit;
+    if (_closing || await _confirmDiscardAll()) return ui.AppExitResponse.exit;
     return ui.AppExitResponse.cancel;
   }
 
   @override
   Future<void> onWindowClose() async {
-    if (_closing || await _confirmDiscard()) {
+    if (_closing || await _confirmDiscardAll()) {
       _closing = true;
       await windowManager.destroy();
     }
@@ -158,16 +192,20 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
   /// handled first, exactly as when closing the window.
   Future<void> _startUpdate() async {
     final updates = widget.updates;
-    if (updates == null || !await _confirmDiscard()) return;
-    final state = controller.document.state;
+    if (updates == null || !await _confirmDiscardAll()) return;
+    final states = {
+      for (final picture in pictures.pictures) picture: picture.document.state,
+    };
     if (await updates.startUpdater() == LaunchResult.started) {
-      // Windows copies the app for the updater first, and the picture may
-      // change meanwhile; if the user keeps it open, the updater waits
+      // Windows copies the app for the updater first, and the pictures may
+      // change meanwhile; if the user keeps one open, the updater waits
       if (!mounted) return;
-      if (!identical(controller.document.state, state) &&
-          !await _confirmDiscard()) {
-        return;
+      for (final picture in pictures.pictures.toList()) {
+        if (!_isOpen(picture)) continue;
+        if (identical(picture.document.state, states[picture])) continue;
+        if (!await _confirmDiscard(picture)) return;
       }
+      if (!mounted) return;
       _closing = true;
       await windowManager.destroy();
       return;
@@ -192,11 +230,15 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<bool> _confirmDiscard() async {
-    if (!controller.document.dirty) return true;
-    switch (await askToSave(context, _name)) {
+  /// Whether [picture] may go away: saved, or the user gave it up.
+  Future<bool> _confirmDiscard(OpenPicture picture) async {
+    // a free transform still open is part of what is asked about and saved
+    picture.settle();
+    if (!picture.document.dirty) return true;
+    pictures.activate(picture);
+    switch (await askToSave(context, _nameOf(picture))) {
       case UnsavedChoice.save:
-        return _save();
+        return _save(picture);
       case UnsavedChoice.discard:
         return true;
       case UnsavedChoice.cancel:
@@ -204,40 +246,62 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
     }
   }
 
+  /// Asks about every picture with unsaved changes, showing each one first.
+  Future<bool> _confirmDiscardAll() async {
+    for (final picture in pictures.pictures.toList()) {
+      if (!_isOpen(picture)) continue;
+      if (!await _confirmDiscard(picture)) return false;
+    }
+    return true;
+  }
+
   Future<void> _newImage() async {
-    if (!await _confirmDiscard() || !mounted) return;
     final document = controller.document;
     final size = await askNewImageSize(
       context,
       Size(document.width.toDouble(), document.height.toDouble()),
     );
-    if (size == null) return;
-    controller.newImage(
-      size.width,
-      size.height,
-      background: const Color(0xFFFFFFFF),
-    );
-    _fitAfterLoad();
+    if (size == null || !mounted) return;
+    _fitAfterLoad(pictures.addBlank(size.width, size.height));
   }
 
   Future<void> _open() async {
-    if (!await _confirmDiscard()) return;
-    final OpenedFile? file;
+    final List<String> paths;
     try {
-      file = await widget.files.pick();
+      paths = await widget.files.pick();
     } catch (_) {
       if (mounted) _tell(context.l10n.openFailed);
       return;
     }
-    if (file != null) await _load(file);
+    for (final path in paths) {
+      _inTurn(() => _openFile(path));
+    }
   }
 
-  Future<void> _openFromSystem(OpenedFile file) async {
-    if (await _confirmDiscard()) await _load(file);
+  Future<void> _openFile(String path) async {
+    final l10n = context.l10n;
+    if (pictures.showFile(path)) return;
+    final OpenedFile file;
+    try {
+      file = await widget.files.read(path);
+    } catch (_) {
+      return _tell(l10n.openFailed);
+    }
+    if (mounted) await _load(file);
+  }
+
+  Future<void> _close(OpenPicture picture) async {
+    if (!await _confirmDiscard(picture) || !_isOpen(picture)) return;
+    final last = pictures.pictures.length == 1;
+    pictures.close(picture);
+    // the fresh picture that takes its place opens as the first one did
+    if (last) _fitAfterLoad(_picture);
   }
 
   Future<void> _load(OpenedFile file) async {
     final l10n = context.l10n;
+    final path = file.path;
+    if (path != null && pictures.showFile(path)) return;
     final LoadedDocument loaded;
     try {
       loaded = await loadDocument(file.bytes, layerName: l10n.backgroundLayer);
@@ -247,48 +311,59 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
       return _tell(l10n.openFailed);
     }
     if (!mounted) return;
+    final OpenPicture picture;
     if (loaded.loss == LoadLoss.none) {
       final format = SaveFormat.of(file.name);
-      controller.load(
+      picture = pictures.open(
         loaded.state,
         name: file.name,
         // a GIF or WebP is saved as a new file, never over the original
-        path: format == null ? null : file.path,
+        path: format == null ? null : path,
         format: format ?? SaveFormat.png,
+        source: path,
       );
     } else {
       // saving over a PSD that did not come whole would destroy the rest
-      controller.load(loaded.state, name: file.name, format: SaveFormat.psd);
+      picture = pictures.open(
+        loaded.state,
+        name: file.name,
+        format: SaveFormat.psd,
+        source: path,
+      );
       _tell(
         loaded.loss == LoadLoss.simplified
             ? l10n.psdSimplified
             : l10n.psdOpenedFlat,
       );
     }
-    _fitAfterLoad();
+    _fitAfterLoad(picture);
   }
 
+  CanvasViewState? _canvasOf(OpenPicture picture) =>
+      _CanvasKey(picture).currentState;
+
   /// Big images open whole; small ones at 100%.
-  void _fitAfterLoad() {
+  void _fitAfterLoad(OpenPicture picture) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final fitting = _canvas.currentState?.fittingZoom ?? 1;
-      _setZoom(math.min(1.0, fitting));
+      if (!_isOpen(picture)) return;
+      final fitting = _canvasOf(picture)?.fittingZoom ?? 1;
+      _setZoom(picture, math.min(1.0, fitting));
     });
   }
 
-  Future<bool> _save() {
-    final document = controller.document;
+  Future<bool> _save(OpenPicture picture) {
+    final document = picture.document;
     final path = document.path;
-    if (path == null) return _saveAs(document.format);
+    if (path == null) return _saveAs(picture, document.format);
     // a flat file cannot hold the layers added since it was opened
     if (!document.format.keepsLayers && document.state.isLayered) {
-      return _saveAs(SaveFormat.psd);
+      return _saveAs(picture, SaveFormat.psd);
     }
-    return _write(path, document.format);
+    return _write(picture, path, document.format);
   }
 
-  Future<bool> _saveAs(SaveFormat format) async {
-    final name = _name;
+  Future<bool> _saveAs(OpenPicture picture, SaveFormat format) async {
+    final name = _nameOf(picture);
     final dot = name.lastIndexOf('.');
     final base = dot > 0 ? name.substring(0, dot) : name;
     final String? path;
@@ -302,12 +377,16 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
       return false;
     }
     if (path == null) return false;
-    return _write(path, format);
+    return _write(picture, path, format);
   }
 
-  Future<bool> _write(String path, SaveFormat format) async {
+  Future<bool> _write(
+    OpenPicture picture,
+    String path,
+    SaveFormat format,
+  ) async {
     final l10n = context.l10n;
-    final document = controller.document;
+    final document = picture.document;
     final state = document.state;
     try {
       await widget.files.write(path, await encodeDocument(state, format));
@@ -315,12 +394,15 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
       _tell(l10n.saveFailed);
       return false;
     }
+    // closed while the file was being written
+    if (!_isOpen(picture)) return true;
     if (format.keepsLayers || !state.isLayered) {
       document.markSaved(
         name: path.split(RegExp(r'[/\\]')).last,
         path: path,
         format: format,
       );
+      picture.source = path;
     } else {
       // the layers live only here: the document stays unsaved
       _tell(l10n.exportedCopy(format.label));
@@ -339,19 +421,23 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
   }
 
   Future<void> _cut() async {
-    if (!controller.hasSelection) return;
+    final picture = _picture;
+    if (!picture.controller.hasSelection) return;
     await _copy();
-    controller.deleteSelection();
+    if (_isOpen(picture)) picture.controller.deleteSelection();
   }
 
+  /// Pastes into the picture that was in front when it was asked for.
   Future<void> _paste() async {
     final l10n = context.l10n;
+    final picture = _picture;
     final bytes = await widget.clipboard.read().catchError((_) => null);
     if (bytes == null) return _tell(l10n.nothingToPaste);
+    if (!_isOpen(picture)) return;
     try {
-      final fits = await controller.paste(
+      final fits = await picture.controller.paste(
         bytes,
-        origin: _canvas.currentState?.visibleOrigin ?? Offset.zero,
+        origin: _canvasOf(picture)?.visibleOrigin ?? Offset.zero,
       );
       if (!fits) _tell(l10n.imageTooLarge(maxImageSide));
     } catch (_) {
@@ -360,6 +446,7 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
   }
 
   Future<void> _addText(Offset at) async {
+    final controller = this.controller;
     final request = await askText(context);
     if (request == null) return;
     controller.addText(
@@ -371,11 +458,13 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
   }
 
   Future<void> _renameLayer(Layer layer) async {
+    final controller = this.controller;
     final name = await askLayerName(context, layer.name);
     if (name != null) controller.renameLayer(layer.id, name);
   }
 
   Future<void> _adjust(Adjustment adjustment) async {
+    final controller = this.controller;
     final matrix = await askAdjustment(
       context,
       adjustment,
@@ -390,6 +479,7 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
   }
 
   Future<void> _resize() async {
+    final controller = this.controller;
     final document = controller.document;
     final size = await askResize(
       context,
@@ -414,14 +504,21 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
     }
   }
 
-  void _setZoom(double zoom) => setState(() => _zoom = clampZoom(zoom));
+  void _setZoom(OpenPicture picture, double zoom) =>
+      setState(() => picture.zoom = clampZoom(zoom));
 
   void _stepZoom(int direction) {
-    if (nextZoom(_zoom, direction) case final zoom?) _setZoom(zoom);
+    final picture = _picture;
+    if (nextZoom(picture.zoom, direction) case final zoom?) {
+      _setZoom(picture, zoom);
+    }
   }
 
   void _fit() {
-    if (_canvas.currentState case final canvas?) _setZoom(canvas.fittingZoom);
+    final picture = _picture;
+    if (_canvasOf(picture) case final canvas?) {
+      _setZoom(picture, canvas.fittingZoom);
+    }
   }
 
   void _showFilePanel() => showFilePanel(
@@ -431,8 +528,9 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
     actions: FilePanelActions(
       newImage: _newImage,
       open: _open,
-      save: _save,
-      saveAs: _saveAs,
+      save: () => _save(_picture),
+      saveAs: (format) => _saveAs(_picture, format),
+      close: () => _close(_picture),
     ),
   );
 
@@ -441,13 +539,16 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
     ShortcutActions(
       newImage: _newImage,
       open: _open,
-      save: _save,
-      saveAs: () => _saveAs(controller.document.format),
+      save: () => _save(_picture),
+      saveAs: () => _saveAs(_picture, _picture.document.format),
+      close: () => _close(_picture),
+      nextPicture: pictures.next,
+      previousPicture: pictures.previous,
       copy: _copy,
       cut: _cut,
       paste: _paste,
       stepZoom: _stepZoom,
-      actualSize: () => _setZoom(1),
+      actualSize: () => _setZoom(_picture, 1),
       fit: _fit,
       resize: _resize,
       adjust: _adjust,
@@ -513,15 +614,31 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
                         onEditColor: _editColor,
                       ),
                       Expanded(
-                        child: Listener(
-                          onPointerDown: (_) => _focus.requestFocus(),
-                          child: CanvasView(
-                            key: _canvas,
-                            controller: controller,
-                            zoom: _zoom,
-                            onZoom: _setZoom,
-                            onText: _addText,
-                          ),
+                        child: Column(
+                          children: [
+                            PictureTabs(pictures: pictures, onClose: _close),
+                            Expanded(
+                              child: Listener(
+                                onPointerDown: (_) => _focus.requestFocus(),
+                                // the pictures behind keep their scroll
+                                child: IndexedStack(
+                                  index: pictures.activeIndex,
+                                  sizing: StackFit.expand,
+                                  children: [
+                                    for (final picture in pictures.pictures)
+                                      CanvasView(
+                                        key: _CanvasKey(picture),
+                                        controller: picture.controller,
+                                        zoom: picture.zoom,
+                                        onZoom: (zoom) =>
+                                            _setZoom(picture, zoom),
+                                        onText: _addText,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       Container(
@@ -551,8 +668,8 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
                 ),
                 StatusBar(
                   controller: controller,
-                  zoom: _zoom,
-                  onZoom: _setZoom,
+                  zoom: _picture.zoom,
+                  onZoom: (zoom) => _setZoom(_picture, zoom),
                   onFit: _fit,
                   trailing: switch (widget.updates) {
                     final updates? => UpdateStatusChip(
@@ -585,4 +702,9 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
       child: child,
     );
   }
+}
+
+/// Finds the canvas of a picture, wherever it is among the open ones.
+class _CanvasKey extends GlobalObjectKey<CanvasViewState> {
+  const _CanvasKey(OpenPicture super.picture);
 }

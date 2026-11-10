@@ -42,6 +42,7 @@ class EditorController extends ChangeNotifier {
     document.addListener(_onDocument);
     settings.addListener(_onSettings);
     _size = (document.width, document.height);
+    _layersAdded = document.layers.length;
   }
 
   final ImageDocument document;
@@ -68,6 +69,9 @@ class EditorController extends ChangeNotifier {
   Uint8List? _copied;
   Offset _copiedAt = Offset.zero;
   var _busy = false;
+
+  /// Work that ends after the picture was closed is dropped.
+  var _closed = false;
   var _layersAdded = 1;
 
   /// The selected area, in image pixels; null when nothing is selected.
@@ -339,7 +343,7 @@ class EditorController extends ChangeNotifier {
       final Rect box;
       try {
         final found = await compute(opaqueBounds, await readPixels(lifted));
-        if (found == null || revision != document.revision) return;
+        if (found == null || _closed || revision != document.revision) return;
         final (left, top, right, bottom) = found;
         final inside = Rect.fromLTRB(
           left.toDouble(),
@@ -510,6 +514,10 @@ class EditorController extends ChangeNotifier {
   /// False when the image is larger than the app allows.
   Future<bool> paste(Uint8List bytes, {Offset origin = Offset.zero}) async {
     final image = await decodeImageBytes(bytes);
+    if (_closed) {
+      image.dispose();
+      return true;
+    }
     if (image.width > maxImageSide || image.height > maxImageSide) {
       image.dispose();
       return false;
@@ -551,9 +559,9 @@ class EditorController extends ChangeNotifier {
         color,
         settings.tolerance,
       ));
-      if (fill == null || revision != document.revision) return;
+      if (fill == null || _closed || revision != document.revision) return;
       final overlay = await imageFromPixels(fill, pixels.width, pixels.height);
-      if (revision == document.revision) {
+      if (!_closed && revision == document.revision) {
         final paint = Paint()
           ..color = Color.fromRGBO(0, 0, 0, settings.opacity);
         _commitPaint((canvas) => canvas.drawImage(overlay, Offset.zero, paint));
@@ -589,19 +597,6 @@ class EditorController extends ChangeNotifier {
   }
 
   // Image -----------------------------------------------------------------
-
-  void newImage(int width, int height, {required Color background}) {
-    _reset();
-    document.replace(
-      DocumentState(width, height, [
-        Layer(
-          id: 1,
-          name: layerName(1),
-          image: blankImage(width, height, background),
-        ),
-      ]),
-    );
-  }
 
   void load(
     DocumentState state, {
@@ -930,6 +925,7 @@ class EditorController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _closed = true;
     document.removeListener(_onDocument);
     settings.removeListener(_onSettings);
     _floating?.dispose();
