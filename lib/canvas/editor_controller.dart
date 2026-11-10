@@ -9,12 +9,30 @@ import '../document/image_document.dart';
 import '../document/layer.dart';
 import '../painting/flood_fill.dart';
 import '../painting/image_formats.dart';
+import '../painting/opaque_bounds.dart';
 import '../painting/rgba_image.dart';
+import 'free_transform.dart';
 import 'image_ops.dart';
 import 'marks.dart';
 import 'tool_settings.dart';
 
 enum _Combine { replace, add, subtract }
+
+/// The pixels a free transform took off the active layer.
+class _Floating {
+  _Floating(this.piece, this.rest, this.model, this.layerId, this.revision);
+
+  final ui.Image piece;
+  final ui.Image? rest;
+  final FreeTransform model;
+  final int layerId;
+  final int revision;
+
+  void dispose() {
+    piece.dispose();
+    rest?.dispose();
+  }
+}
 
 /// What the tools and the menus do to the document, in image pixels. The
 /// widgets only turn clicks and drags into these calls.
@@ -46,6 +64,7 @@ class EditorController extends ChangeNotifier {
   Offset? _moveShift;
   Rect? _crop;
   ColorFilter? _filter;
+  _Floating? _floating;
   Uint8List? _copied;
   Offset _copiedAt = Offset.zero;
   var _busy = false;
@@ -73,6 +92,17 @@ class EditorController extends ChangeNotifier {
 
   /// What is being done to the active layer and is not in the document yet.
   LivePreview? get live {
+    if (_floating case final floating?) {
+      return LivePreview(
+        layerId: floating.layerId,
+        floating: FloatingPiece(
+          image: floating.piece,
+          matrix: floating.model.matrix,
+          smooth: !floating.model.keepsPixels,
+          rest: floating.rest,
+        ),
+      );
+    }
     if (_mark == null && _moveShift == null && _filter == null) return null;
     return LivePreview(
       layerId: document.activeId,
@@ -91,7 +121,19 @@ class EditorController extends ChangeNotifier {
 
   // Pointer ---------------------------------------------------------------
 
-  void pointerDown(Offset point, {bool add = false, bool subtract = false}) {
+  /// [reach] is how far from a handle of the free transform a click still
+  /// grabs it, in image pixels.
+  void pointerDown(
+    Offset point, {
+    bool add = false,
+    bool subtract = false,
+    double reach = 4,
+  }) {
+    if (_floating case final floating?) {
+      floating.model.startDrag(point, reach);
+      notifyListeners();
+      return;
+    }
     final tool = settings.tool;
     final paints = tool.isPen || tool.isShape || tool == EditTool.gradient;
     if (paints && !canPaint) return;
@@ -159,9 +201,20 @@ class EditorController extends ChangeNotifier {
   }
 
   /// [constrain] keeps lines at multiples of 45°, makes shapes square and
-  /// moves along one axis.
-  void pointerMove(Offset point, {bool constrain = false}) {
+  /// moves along one axis. [fromCenter] makes a free transform scale around
+  /// its middle.
+  void pointerMove(
+    Offset point, {
+    bool constrain = false,
+    bool fromCenter = false,
+  }) {
     hover(point);
+    if (_floating case final floating?) {
+      if (!floating.model.isDragging) return;
+      floating.model.drag(point, constrain: constrain, fromCenter: fromCenter);
+      notifyListeners();
+      return;
+    }
     final start = _start;
     switch (_mark) {
       case final PenMark pen:
@@ -192,6 +245,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void pointerUp() {
+    _floating?.model.endDrag();
     final mark = _mark;
     _mark = null;
     final drawn = switch (mark) {
@@ -224,6 +278,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void pointerCancel() {
+    _floating?.model.endDrag();
     _mark = null;
     _moveShift = null;
     _endDrag();
@@ -243,13 +298,141 @@ class EditorController extends ChangeNotifier {
 
   void undo() {
     pointerCancel();
+    if (isTransforming) return cancelTransform();
     document.undo();
   }
 
   void redo() {
     pointerCancel();
+    if (isTransforming) return;
     document.redo();
   }
+
+  // Free transform --------------------------------------------------------
+
+  /// The box being moved, scaled and turned; null when none is.
+  FreeTransform? get transform => _floating?.model;
+
+  bool get isTransforming => _floating != null;
+
+  /// Lifts what is selected on the active layer, or everything it has, so
+  /// it can be moved, scaled and turned before going back.
+  Future<void> beginTransform() async {
+    if (_busy || isTransforming || !canPaint) return;
+    _busy = true;
+    try {
+      final revision = document.revision;
+      final layer = activeLayer;
+      final selection = _selection;
+      final area = selection == null
+          ? layer.bounds
+          : _wholePixels(selection.getBounds()).intersect(layer.bounds);
+      if (area.isEmpty) return;
+      final lifted = renderImage(area.width.toInt(), area.height.toInt(), (
+        canvas,
+      ) {
+        canvas.translate(-area.left, -area.top);
+        if (selection != null) canvas.clipPath(selection);
+        canvas.drawImage(layer.image, layer.offset, Paint());
+      });
+      final ui.Image piece;
+      final Rect box;
+      try {
+        final found = await compute(opaqueBounds, await readPixels(lifted));
+        if (found == null || revision != document.revision) return;
+        final (left, top, right, bottom) = found;
+        final inside = Rect.fromLTRB(
+          left.toDouble(),
+          top.toDouble(),
+          right.toDouble(),
+          bottom.toDouble(),
+        );
+        piece = cropImage(lifted, inside);
+        box = inside.shift(area.topLeft);
+      } finally {
+        lifted.dispose();
+      }
+      final rest = selection == null
+          ? null
+          : renderImage(layer.image.width, layer.image.height, (canvas) {
+              canvas
+                ..drawImage(
+                  layer.image,
+                  Offset.zero,
+                  Paint()..blendMode = BlendMode.src,
+                )
+                ..translate(-layer.offset.dx, -layer.offset.dy)
+                ..clipPath(selection)
+                ..drawPaint(Paint()..blendMode = BlendMode.clear);
+            });
+      pointerCancel();
+      _crop = null;
+      _floating = _Floating(
+        piece,
+        rest,
+        FreeTransform(box),
+        layer.id,
+        revision,
+      );
+    } finally {
+      _busy = false;
+    }
+    notifyListeners();
+  }
+
+  /// One undo step: the layer with the box where it was left.
+  void applyTransform() {
+    final floating = _floating;
+    if (floating == null) return;
+    final model = floating.model;
+    if (model.isIdentity) return cancelTransform();
+    final layer = activeLayer;
+    var area = _wholePixels(model.bounds);
+    if (floating.rest != null) area = area.expandToInclude(layer.bounds);
+    area = _roomFor(area);
+    final image = renderImage(area.width.toInt(), area.height.toInt(), (
+      canvas,
+    ) {
+      canvas.translate(-area.left, -area.top);
+      if (floating.rest case final rest?) {
+        canvas.drawImage(rest, layer.offset, Paint());
+      }
+      canvas
+        ..transform(model.matrix)
+        ..drawImage(
+          floating.piece,
+          Offset.zero,
+          Paint()
+            ..filterQuality = model.keepsPixels
+                ? FilterQuality.none
+                : FilterQuality.medium,
+        );
+    });
+    _floating = null;
+    if (_selection case final selection?) {
+      _setSelection(selection.transform(model.imageMatrix));
+    }
+    document.commit(
+      document.state.replacing(
+        layer.copyWith(image: image, offset: area.topLeft),
+      ),
+    );
+    floating.dispose();
+  }
+
+  void cancelTransform() {
+    final floating = _floating;
+    if (floating == null) return;
+    _floating = null;
+    floating.dispose();
+    notifyListeners();
+  }
+
+  /// What Enter does: applies the free transform, or else the crop.
+  void confirm() => isTransforming ? applyTransform() : applyCrop();
+
+  /// What Esc does: gives up the free transform, or else the selection.
+  void cancel() => isTransforming ? cancelTransform() : deselect();
 
   // Selection -------------------------------------------------------------
 
@@ -675,6 +858,11 @@ class EditorController extends ChangeNotifier {
 
   /// Moves the active layer by whole pixels, as the arrow keys do.
   void nudge(int dx, int dy) {
+    if (_floating case final floating?) {
+      floating.model.moveBy(Offset(dx.toDouble(), dy.toDouble()));
+      notifyListeners();
+      return;
+    }
     final layer = activeLayer;
     document.commit(
       document.state.replacing(
@@ -744,6 +932,7 @@ class EditorController extends ChangeNotifier {
   void dispose() {
     document.removeListener(_onDocument);
     settings.removeListener(_onSettings);
+    _floating?.dispose();
     cursor.dispose();
     super.dispose();
   }
@@ -859,6 +1048,8 @@ class EditorController extends ChangeNotifier {
     _selection = null;
     _crop = null;
     _filter = null;
+    _floating?.dispose();
+    _floating = null;
     _layersAdded = 1;
     _endDrag();
   }
@@ -905,6 +1096,13 @@ class EditorController extends ChangeNotifier {
   }
 
   void _onDocument() {
+    // the layer changed under the box: what it lifted is no longer there
+    if (_floating case final floating?
+        when floating.revision != document.revision ||
+            floating.layerId != document.activeId) {
+      _floating = null;
+      floating.dispose();
+    }
     final size = (document.width, document.height);
     // undo or redo of a crop or a resize: the old areas no longer fit
     if (size != _size) {
@@ -918,6 +1116,7 @@ class EditorController extends ChangeNotifier {
   void _onSettings() {
     if (settings.tool != _tool) {
       _tool = settings.tool;
+      applyTransform();
       _mark = null;
       _moveShift = null;
       _crop = null;

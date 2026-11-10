@@ -102,6 +102,7 @@
   "duplicateLayer": "Duplicar capa",
   "deleteLayer": "Eliminar capa",
   "renameLayer": "Cambiar nombre de la capa…",
+  "freeTransform": "Transformación libre",
   "mergeDown": "Combinar hacia abajo",
   "raiseLayer": "Traer adelante",
   "lowerLayer": "Enviar atrás",

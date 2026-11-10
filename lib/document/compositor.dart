@@ -1,8 +1,30 @@
+import 'dart:typed_data';
 import 'dart:ui';
 
 import '../canvas/marks.dart';
 import 'image_document.dart';
 import 'layer.dart';
+
+/// Pixels lifted off a layer while they are being transformed.
+class FloatingPiece {
+  const FloatingPiece({
+    required this.image,
+    required this.matrix,
+    required this.smooth,
+    this.rest,
+  });
+
+  final Image image;
+
+  /// Takes the pixels of [image] to where they show on the document.
+  final Float64List matrix;
+
+  /// Scaled or turned pixels are blended; moved ones stay as they are.
+  final bool smooth;
+
+  /// What stays of the layer under the piece; null when all of it floats.
+  final Image? rest;
+}
 
 /// What is still being done to one layer and shows before it is committed:
 /// a stroke, a drag of the move tool, an adjustment being tuned.
@@ -13,6 +35,7 @@ class LivePreview {
     this.clip,
     this.shift = Offset.zero,
     this.filter,
+    this.floating,
   });
 
   final int layerId;
@@ -22,6 +45,7 @@ class LivePreview {
   final Path? clip;
   final Offset shift;
   final ColorFilter? filter;
+  final FloatingPiece? floating;
 }
 
 /// Paints the visible layers, bottom first, in document pixels.
@@ -48,8 +72,25 @@ void paintLayers(
       canvas.drawImage(layer.image, layer.offset, paint);
       continue;
     }
-    final at = layer.offset + live.shift;
     final plain = Paint()..filterQuality = quality;
+    if (live.floating case final floating?) {
+      canvas.saveLayer(bounds, paint);
+      if (floating.rest case final rest?) {
+        canvas.drawImage(rest, layer.offset, plain);
+      }
+      canvas
+        ..transform(floating.matrix)
+        ..drawImage(
+          floating.image,
+          Offset.zero,
+          floating.smooth
+              ? (Paint()..filterQuality = FilterQuality.medium)
+              : plain,
+        )
+        ..restore();
+      continue;
+    }
+    final at = layer.offset + live.shift;
     canvas
       ..saveLayer(bounds, paint)
       ..drawImage(layer.image, at, plain)

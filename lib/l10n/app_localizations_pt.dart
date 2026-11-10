@@ -336,6 +336,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get renameLayer => 'Renomear camada…';
 
   @override
+  String get freeTransform => 'Transformação livre';
+
+  @override
   String get mergeDown => 'Mesclar para baixo';
 
   @override

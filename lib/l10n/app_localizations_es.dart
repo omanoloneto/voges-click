@@ -336,6 +336,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get renameLayer => 'Cambiar nombre de la capa…';
 
   @override
+  String get freeTransform => 'Transformación libre';
+
+  @override
   String get mergeDown => 'Combinar hacia abajo';
 
   @override

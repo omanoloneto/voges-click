@@ -39,7 +39,7 @@ Nothing new to show, but everything after this depends on it.
 
 What almost every editing session needs and 1.0 lacks.
 
-1. **Free transform** (`Ctrl+T`): scale, rotate, skew, distort and perspective with handles, on a layer or a selection, with numeric fields.
+1. **Free transform** (`Ctrl+T`): ~~scale and rotate with handles, on a layer or a selection~~ (done); still missing: skew, distort, perspective and numeric fields.
 2. **Crop tool with handles**, aspect ratios, straighten, and the choice to keep the cropped pixels.
 3. **Magic wand** with tolerance, contiguous and sample-all-layers.
 4. **Selection arithmetic**: add, subtract and intersect with Shift/Alt, select all, deselect, reselect.

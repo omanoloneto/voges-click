@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -313,6 +314,128 @@ void main() {
       expect(controller.canUndo, isTrue);
       controller.undo();
       expect(controller.canUndo, isFalse);
+    });
+  });
+
+  testWidgets('free transform moves, scales and turns what the layer has', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor();
+      controller.addLayer();
+      _selectRect(controller, const Rect.fromLTWH(4, 4, 10, 6));
+      controller.settings.color1 = red;
+      controller.fillSelection();
+      controller.deselect();
+      final before = controller.document.state;
+
+      await controller.beginTransform();
+      final box = controller.transform!;
+      // the box hugs the paint, not the whole transparent layer
+      expect(box.box, const Rect.fromLTWH(4, 4, 10, 6));
+
+      _drag(controller, const Offset(8, 6), const Offset(18, 16));
+      controller
+        ..pointerDown(const Offset(24, 20), reach: 2)
+        ..pointerMove(const Offset(34, 26))
+        ..pointerUp();
+      expect(box.box.shift(const Offset(10, 10)).topLeft, box.bounds.topLeft);
+      expect(box.width, 20);
+      expect(box.height, 12);
+      // nothing is painted until it is applied
+      expect(controller.document.state, same(before));
+
+      controller.confirm();
+      expect(controller.isTransforming, isFalse);
+      expect(controller.document.state, isNot(same(before)));
+      expect(
+        controller.activeLayer.bounds,
+        const Rect.fromLTWH(14, 14, 20, 12),
+      );
+      var pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(6, 6), 0xFFFFFFFF);
+      expect(pixels.colorAt(15, 15), 0xFFFF0000);
+      expect(pixels.colorAt(32, 24), 0xFFFF0000);
+      expect(pixels.colorAt(36, 24), 0xFFFFFFFF);
+
+      controller.undo();
+      // one step, however many drags it took
+      expect(controller.document.state, same(before));
+      pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(6, 6), 0xFFFF0000);
+      expect(pixels.colorAt(32, 24), 0xFFFFFFFF);
+
+      await controller.beginTransform();
+      controller.transform!.angle = math.pi / 2;
+      controller.applyTransform();
+      expect(controller.activeLayer.bounds, const Rect.fromLTWH(6, 2, 6, 10));
+      pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(8, 3), 0xFFFF0000);
+      expect(pixels.colorAt(5, 6), 0xFFFFFFFF);
+    });
+  });
+
+  testWidgets('free transform takes only the selection and brings it along', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor();
+      controller.settings.color1 = red;
+      _selectRect(controller, const Rect.fromLTWH(0, 0, 10, 10));
+      controller.fillSelection();
+
+      await controller.beginTransform();
+      controller.nudge(20, 5);
+      controller.applyTransform();
+      final pixels = await composite(controller.document.state);
+      // the hole it left shows nothing: this is the only layer
+      expect(pixels.colorAt(5, 2) >>> 24, 0);
+      expect(pixels.colorAt(25, 10), 0xFFFF0000);
+      expect(pixels.colorAt(15, 20), 0xFFFFFFFF);
+      expect(
+        controller.selection!.getBounds(),
+        const Rect.fromLTWH(20, 5, 10, 10),
+      );
+    });
+  });
+
+  testWidgets('free transform is given up by Esc, undo or a new tool', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final controller = _editor();
+      final before = controller.document.state;
+
+      await controller.beginTransform();
+      controller.nudge(5, 5);
+      controller.cancel();
+      expect(controller.isTransforming, isFalse);
+      expect(controller.document.state, same(before));
+
+      await controller.beginTransform();
+      controller.nudge(5, 5);
+      controller.undo();
+      expect(controller.isTransforming, isFalse);
+      expect(controller.document.state, same(before));
+
+      // left untouched, applying paints nothing
+      await controller.beginTransform();
+      controller.confirm();
+      expect(controller.isTransforming, isFalse);
+      expect(controller.document.state, same(before));
+
+      await controller.beginTransform();
+      controller.nudge(5, 5);
+      controller.settings.tool = EditTool.move;
+      expect(controller.isTransforming, isFalse);
+      expect(controller.document.state, isNot(same(before)));
+      final pixels = await composite(controller.document.state);
+      expect(pixels.colorAt(2, 2) >>> 24, 0);
+      expect(pixels.colorAt(20, 20), 0xFFFFFFFF);
+
+      controller.setLayerVisible(controller.activeLayer.id, false);
+      await controller.beginTransform();
+      expect(controller.isTransforming, isFalse);
     });
   });
 

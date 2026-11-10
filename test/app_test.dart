@@ -240,6 +240,40 @@ void main() {
     expect(controller.canUndo, isTrue);
   });
 
+  testWidgets('Ctrl+T opens the free transform, Enter and Esc close it', (
+    tester,
+  ) async {
+    final controller = await _pump(tester);
+    const control = LogicalKeyboardKey.control;
+    await tester.runAsync(() async {
+      await _chord(tester, [control], LogicalKeyboardKey.keyT);
+      for (var tries = 0; !controller.isTransforming && tries < 200; tries++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pump();
+    expect(controller.isTransforming, isTrue);
+    expect(find.text('Free transform'), findsOneWidget);
+    expect(find.text('Apply'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(controller.isTransforming, isFalse);
+    expect(controller.canUndo, isTrue);
+    expect(controller.activeLayer.offset, const Offset(1, 0));
+
+    await tester.runAsync(() async {
+      await _chord(tester, [control], LogicalKeyboardKey.keyT);
+      for (var tries = 0; !controller.isTransforming && tries < 200; tries++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(controller.isTransforming, isFalse);
+  });
+
   testWidgets('the interface follows the chosen language', (tester) async {
     await _pump(tester, locale: const Locale('pt'));
     expect(find.text('Arquivo'), findsOneWidget);

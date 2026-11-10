@@ -56,7 +56,9 @@ Map<ShortcutActivator, VoidCallback> editorShortcuts(
   }
 
   void nudge(int dx, int dy) {
-    if (settings.tool == EditTool.move) controller.nudge(dx, dy);
+    if (settings.tool == EditTool.move || controller.isTransforming) {
+      controller.nudge(dx, dy);
+    }
   }
 
   void growBrush(int direction) {
@@ -88,6 +90,7 @@ Map<ShortcutActivator, VoidCallback> editorShortcuts(
     shortcut(LogicalKeyboardKey.keyC): actions.copy,
     shortcut(LogicalKeyboardKey.keyX): actions.cut,
     shortcut(LogicalKeyboardKey.keyV): actions.paste,
+    shortcut(LogicalKeyboardKey.keyT): controller.beginTransform,
     for (final key in _erasers) ...{
       SingleActivator(key): controller.deleteSelection,
       SingleActivator(key, alt: true): controller.fillSelection,
@@ -100,9 +103,9 @@ Map<ShortcutActivator, VoidCallback> editorShortcuts(
     shortcut(LogicalKeyboardKey.keyA): controller.selectAll,
     shortcut(LogicalKeyboardKey.keyD): controller.deselect,
     shortcut(LogicalKeyboardKey.keyI, shift: true): controller.invertSelection,
-    const SingleActivator(LogicalKeyboardKey.enter): controller.applyCrop,
-    const SingleActivator(LogicalKeyboardKey.numpadEnter): controller.applyCrop,
-    const SingleActivator(LogicalKeyboardKey.escape): controller.deselect,
+    const SingleActivator(LogicalKeyboardKey.enter): controller.confirm,
+    const SingleActivator(LogicalKeyboardKey.numpadEnter): controller.confirm,
+    const SingleActivator(LogicalKeyboardKey.escape): controller.cancel,
 
     // Image
     shortcut(LogicalKeyboardKey.keyI, alt: true): actions.resize,

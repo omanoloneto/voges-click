@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../document/compositor.dart';
 import 'editor_controller.dart';
+import 'free_transform.dart';
 import 'image_ops.dart';
 import 'tool_settings.dart';
 import 'zoom.dart';
@@ -39,6 +40,7 @@ class CanvasViewState extends State<CanvasView> {
   final _vertical = ScrollController();
   final _surface = GlobalKey();
   final _brushAt = ValueNotifier<Offset?>(null);
+  final _gripCursor = ValueNotifier<MouseCursor?>(null);
   final _outline = _OutlineCache();
   late final ui.Image _checker = renderImage(16, 16, (canvas) {
     canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
@@ -53,6 +55,9 @@ class CanvasViewState extends State<CanvasView> {
   double _pinchStart = 1;
 
   EditorController get controller => widget.controller;
+
+  /// How far from a handle of the free transform a click still grabs it.
+  static const _handleReach = 8.0;
 
   /// Top left of the visible part of the image, in image pixels.
   Offset get visibleOrigin {
@@ -76,6 +81,7 @@ class CanvasViewState extends State<CanvasView> {
     _horizontal.dispose();
     _vertical.dispose();
     _brushAt.dispose();
+    _gripCursor.dispose();
     _checker.dispose();
     super.dispose();
   }
@@ -97,6 +103,10 @@ class CanvasViewState extends State<CanvasView> {
     if (tool == EditTool.hand ||
         keys.isLogicalKeyPressed(LogicalKeyboardKey.space)) {
       _panning = true;
+      return;
+    }
+    if (controller.isTransforming) {
+      controller.pointerDown(point, reach: _handleReach / widget.zoom);
       return;
     }
     switch (tool) {
@@ -124,9 +134,11 @@ class CanvasViewState extends State<CanvasView> {
     final point = _toImage(event.position);
     if (point == null) return;
     _brushAt.value = point;
+    final keys = HardwareKeyboard.instance;
     controller.pointerMove(
       point,
-      constrain: HardwareKeyboard.instance.isShiftPressed,
+      constrain: keys.isShiftPressed,
+      fromCenter: keys.isAltPressed,
     );
   }
 
@@ -165,6 +177,27 @@ class CanvasViewState extends State<CanvasView> {
     final point = _toImage(event.position);
     _brushAt.value = point;
     controller.hover(point);
+    final box = controller.transform;
+    _gripCursor.value = box == null || point == null
+        ? null
+        : _cursorOf(box, box.gripAt(point, _handleReach / widget.zoom));
+  }
+
+  static MouseCursor _cursorOf(FreeTransform box, TransformGrip grip) {
+    final handle = grip.handle;
+    if (handle == null) {
+      return grip.kind == GripKind.move
+          ? SystemMouseCursors.move
+          : SystemMouseCursors.grab;
+    }
+    // the arrow follows the handle around as the box turns
+    final direction = (box.pointOf(handle) - box.center).direction;
+    return const [
+      SystemMouseCursors.resizeLeftRight,
+      SystemMouseCursors.resizeUpLeftDownRight,
+      SystemMouseCursors.resizeUpDown,
+      SystemMouseCursors.resizeUpRightDownLeft,
+    ][(direction / (math.pi / 4)).round() % 4];
   }
 
   void _signal(PointerSignalEvent event) {
@@ -207,9 +240,12 @@ class CanvasViewState extends State<CanvasView> {
                   controller: _horizontal,
                   scrollDirection: Axis.horizontal,
                   child: ListenableBuilder(
-                    listenable: controller.settings,
+                    listenable: Listenable.merge([
+                      controller.settings,
+                      _gripCursor,
+                    ]),
                     builder: (context, child) => MouseRegion(
-                      cursor: _cursor,
+                      cursor: _gripCursor.value ?? _cursor,
                       onHover: _hover,
                       onExit: (_) {
                         _brushAt.value = null;
@@ -344,6 +380,12 @@ class _CanvasPainter extends CustomPainter {
   static final _black = Paint()
     ..style = PaintingStyle.stroke
     ..color = const Color(0xFF1F1F1F);
+  static final _halo = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..color = const Color(0xFFFFFFFF);
+  static final _handleFill = Paint()..color = const Color(0xFFFFFFFF);
+  static const _handleSide = 7.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -371,7 +413,9 @@ class _CanvasPainter extends CustomPainter {
     );
     canvas.restore();
 
-    if (controller.selection case final selection?) {
+    // the outline would stay behind while its pixels are carried around
+    if (controller.selection case final selection?
+        when !controller.isTransforming) {
       final (solid, dashes) = outline.of(selection, zoom);
       canvas.drawPath(solid, _white);
       if (dashes != null) canvas.drawPath(dashes, _black);
@@ -400,6 +444,23 @@ class _CanvasPainter extends CustomPainter {
           Paint()..color = const Color(0x99000000),
         )
         ..drawRect(area.deflate(0.5), _white);
+    }
+    if (controller.transform case final box?) {
+      final outline = Path()
+        ..addPolygon([for (final corner in box.corners) corner * zoom], true);
+      canvas
+        ..drawPath(outline, _halo)
+        ..drawPath(outline, _black);
+      for (final handle in TransformHandle.values) {
+        final square = Rect.fromCenter(
+          center: box.pointOf(handle) * zoom,
+          width: _handleSide,
+          height: _handleSide,
+        );
+        canvas
+          ..drawRect(square, _handleFill)
+          ..drawRect(square, _black);
+      }
     }
   }
 
