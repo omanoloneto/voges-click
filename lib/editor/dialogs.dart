@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../l10n/l10n.dart';
 import '../painting/color_matrix.dart';
 import '../painting/rgba_image.dart';
+import 'panel_controls.dart';
+import 'status_bar.dart';
 
 enum UnsavedChoice { save, discard, cancel }
 
@@ -258,6 +260,21 @@ class _TextDialogState extends State<_TextDialog> {
     );
   }
 
+  /// Enter confirms, as in every other dialog; Shift+Enter is left to the
+  /// field, which starts a new line.
+  KeyEventResult _onTextKey(FocusNode node, KeyEvent event) {
+    final enter =
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!enter ||
+        HardwareKeyboard.instance.isShiftPressed ||
+        _text.value.composing.isValid) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent) _submit();
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -269,13 +286,19 @@ class _TextDialogState extends State<_TextDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _text,
-              autofocus: true,
-              minLines: 2,
-              maxLines: 5,
-              decoration: InputDecoration(hintText: l10n.textHint),
-              onChanged: (_) => setState(() {}),
+            Focus(
+              onKeyEvent: _onTextKey,
+              child: TextField(
+                controller: _text,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  hintText: l10n.textHint,
+                  helperText: l10n.textEnterHint,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -409,6 +432,8 @@ class _AdjustmentDialog extends StatefulWidget {
 }
 
 class _AdjustmentDialogState extends State<_AdjustmentDialog> {
+  static const _gap = 8.0;
+
   var _first = 0.0;
   var _second = 0.0;
 
@@ -429,21 +454,22 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
     double limit,
     ValueChanged<double> onChanged,
   ) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(width: 90, child: Text(label)),
-        Expanded(
-          child: Slider(
-            value: value,
-            min: -limit,
-            max: limit,
-            semanticFormatterCallback: (value) => '$label: ${value.round()}',
-            onChanged: (value) => onChanged(value.roundToDouble()),
-          ),
+        Row(
+          children: [
+            Expanded(child: Text(label)),
+            Text('${value.round()}'),
+          ],
         ),
-        SizedBox(
-          width: 40,
-          child: Text('${value.round()}', textAlign: TextAlign.end),
+        Slider(
+          value: value,
+          min: -limit,
+          max: limit,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          semanticFormatterCallback: (value) => '$label: ${value.round()}',
+          onChanged: (value) => onChanged(value.roundToDouble()),
         ),
       ],
     );
@@ -453,33 +479,44 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return AlertDialog(
-      alignment: Alignment.bottomCenter,
-      insetPadding: const EdgeInsets.fromLTRB(40, 24, 40, 56),
+      // over the side panels, whatever the size of the window: the picture
+      // being adjusted has to stay in sight
+      alignment: Alignment.bottomRight,
+      insetPadding: const EdgeInsets.fromLTRB(
+        _gap,
+        _gap,
+        _gap,
+        statusBarHeight + _gap,
+      ),
+      constraints: const BoxConstraints.tightFor(
+        width: sidePanelWidth - 2 * _gap,
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      titleTextStyle: Theme.of(context).textTheme.titleMedium,
       title: Text(
         (_isHue ? l10n.hueSaturation : l10n.brightnessContrast).replaceAll(
           '…',
           '',
         ),
       ),
-      content: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _slider(
-              _isHue ? l10n.hue : l10n.brightness,
-              _first,
-              _isHue ? 180 : 100,
-              (value) => _change(() => _first = value),
-            ),
-            _slider(
-              _isHue ? l10n.saturation : l10n.contrast,
-              _second,
-              100,
-              (value) => _change(() => _second = value),
-            ),
-          ],
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _slider(
+            _isHue ? l10n.hue : l10n.brightness,
+            _first,
+            _isHue ? 180 : 100,
+            (value) => _change(() => _first = value),
+          ),
+          _slider(
+            _isHue ? l10n.saturation : l10n.contrast,
+            _second,
+            100,
+            (value) => _change(() => _second = value),
+          ),
+        ],
       ),
       actions: [
         TextButton(

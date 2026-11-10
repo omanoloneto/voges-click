@@ -428,6 +428,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get textHint => 'Escribe el texto';
 
   @override
+  String get textEnterHint => 'Intro confirma; Mayús+Intro empieza otra línea';
+
+  @override
   String get fontSize => 'Tamaño';
 
   @override

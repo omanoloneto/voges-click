@@ -132,6 +132,7 @@
   "applyCrop": "Aplicar corte",
   "textTitle": "Texto",
   "textHint": "Digite o texto",
+  "textEnterHint": "Enter confirma; Shift+Enter começa outra linha",
   "fontSize": "Tamanho",
   "bold": "Negrito",
   "renameLayerTitle": "Renomear camada",

@@ -83,6 +83,42 @@ void main() {
     });
   });
 
+  testWidgets('paint that misses the picture leaves no undo step', (
+    tester,
+  ) async {
+    final controller = _editor();
+    controller.settings
+      ..tool = EditTool.brush
+      ..size = 10;
+    controller
+      ..pointerDown(const Offset(-30, 10))
+      ..pointerUp();
+    expect(controller.canUndo, isFalse);
+    expect(controller.document.dirty, isFalse);
+
+    // a stroke that starts outside and comes in still counts
+    _drag(controller, const Offset(-30, 10), const Offset(5, 10));
+    expect(controller.canUndo, isTrue);
+    controller.undo();
+
+    controller.settings.tool = EditTool.rectangle;
+    _drag(controller, const Offset(-40, -40), const Offset(-20, -20));
+    expect(controller.canUndo, isFalse);
+
+    _selectRect(controller, const Rect.fromLTWH(0, 0, 10, 10));
+    controller.settings
+      ..tool = EditTool.pencil
+      ..size = 4;
+    controller
+      ..pointerDown(const Offset(30, 20))
+      ..pointerUp();
+    expect(controller.canUndo, isFalse);
+    controller
+      ..pointerDown(const Offset(5, 5))
+      ..pointerUp();
+    expect(controller.canUndo, isTrue);
+  });
+
   testWidgets('a new layer takes the paint and leaves the one below alone', (
     tester,
   ) async {

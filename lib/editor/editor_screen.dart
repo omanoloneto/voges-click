@@ -525,7 +525,7 @@ class _EditorScreenState extends State<EditorScreen> with WindowListener {
                         ),
                       ),
                       Container(
-                        width: 280,
+                        width: sidePanelWidth,
                         decoration: BoxDecoration(
                           color: colors.surfaceContainer,
                           border: Border(

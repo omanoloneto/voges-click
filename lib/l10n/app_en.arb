@@ -143,6 +143,7 @@
   "applyCrop": "Apply crop",
   "textTitle": "Text",
   "textHint": "Type the text",
+  "textEnterHint": "Enter confirms; Shift+Enter starts a new line",
   "fontSize": "Size",
   "bold": "Bold",
   "renameLayerTitle": "Rename layer",

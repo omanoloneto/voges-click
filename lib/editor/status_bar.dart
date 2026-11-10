@@ -6,6 +6,8 @@ import '../canvas/editor_controller.dart';
 import '../canvas/zoom.dart';
 import '../l10n/l10n.dart';
 
+const statusBarHeight = 30.0;
+
 class StatusBar extends StatelessWidget {
   const StatusBar({
     required this.controller,
@@ -34,7 +36,7 @@ class StatusBar extends StatelessWidget {
     return Material(
       color: theme.colorScheme.surfaceContainer,
       child: SizedBox(
-        height: 30,
+        height: statusBarHeight,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
