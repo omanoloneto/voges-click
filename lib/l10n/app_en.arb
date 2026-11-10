@@ -112,6 +112,7 @@
   "duplicateLayer": "Duplicate layer",
   "deleteLayer": "Delete layer",
   "renameLayer": "Rename layer…",
+  "freeTransform": "Free transform",
   "mergeDown": "Merge down",
   "raiseLayer": "Bring forward",
   "lowerLayer": "Send backward",

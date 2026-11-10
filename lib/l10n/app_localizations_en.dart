@@ -336,6 +336,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get renameLayer => 'Rename layer…';
 
   @override
+  String get freeTransform => 'Free transform';
+
+  @override
   String get mergeDown => 'Merge down';
 
   @override

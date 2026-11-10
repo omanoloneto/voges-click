@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../canvas/editor_controller.dart';
+import '../canvas/free_transform.dart';
 import '../canvas/image_ops.dart';
 import '../canvas/tool_settings.dart';
 import '../l10n/l10n.dart';
@@ -54,7 +55,10 @@ class OptionsBar extends StatelessWidget {
               children: [
                 ..._menus(context.l10n),
                 const _Divider(),
-                ..._toolOptions(context.l10n),
+                if (controller.transform case final box?)
+                  ..._transformOptions(context.l10n, box)
+                else
+                  ..._toolOptions(context.l10n),
               ],
             ),
           ),
@@ -89,6 +93,11 @@ class OptionsBar extends StatelessWidget {
         _item(l10n.duplicateLayer, c.duplicateLayer, keys: shortcutLabel('J')),
         _item(l10n.deleteLayer, layers > 1 ? c.deleteLayer : null),
         _item(l10n.renameLayer, actions.renameLayer),
+        _item(
+          l10n.freeTransform,
+          c.canPaint && !c.isTransforming ? c.beginTransform : null,
+          keys: shortcutLabel('T'),
+        ),
         const Divider(color: RibbonColors.divider),
         _item(
           l10n.mergeDown,
@@ -152,6 +161,30 @@ class OptionsBar extends StatelessWidget {
           keys: shortcutLabel('U', shift: true),
         ),
       ]),
+    ];
+  }
+
+  List<Widget> _transformOptions(AppLocalizations l10n, FreeTransform box) {
+    final degrees = (box.angle * 180 / math.pi).round() % 360;
+    return [
+      const Icon(Icons.transform, color: RibbonColors.text, size: 18),
+      const SizedBox(width: 8),
+      Text(l10n.freeTransform, style: RibbonText.activeTab),
+      const SizedBox(width: 16),
+      Text(
+        l10n.imageSize(box.width.round(), box.height.round()),
+        style: RibbonText.control,
+      ),
+      const SizedBox(width: 12),
+      Text('$degrees°', style: RibbonText.control),
+      const SizedBox(width: 16),
+      _BandButton(
+        label: l10n.apply,
+        filled: true,
+        onPressed: controller.applyTransform,
+      ),
+      const SizedBox(width: 6),
+      _BandButton(label: l10n.cancel, onPressed: controller.cancelTransform),
     ];
   }
 

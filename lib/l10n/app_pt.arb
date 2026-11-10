@@ -102,6 +102,7 @@
   "duplicateLayer": "Duplicar camada",
   "deleteLayer": "Excluir camada",
   "renameLayer": "Renomear camada…",
+  "freeTransform": "Transformação livre",
   "mergeDown": "Mesclar para baixo",
   "raiseLayer": "Trazer para frente",
   "lowerLayer": "Enviar para trás",

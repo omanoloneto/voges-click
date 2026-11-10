@@ -712,6 +712,12 @@ abstract class AppLocalizations {
   /// **'Rename layer…'**
   String get renameLayer;
 
+  /// No description provided for @freeTransform.
+  ///
+  /// In en, this message translates to:
+  /// **'Free transform'**
+  String get freeTransform;
+
   /// No description provided for @mergeDown.
   ///
   /// In en, this message translates to:

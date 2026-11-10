@@ -29,6 +29,7 @@ Voges Click checks for a new version every time it opens and says in the status 
 - **Painting:** brush with size, hardness and opacity, pencil, eraser, paint bucket with tolerance, gradient, line, rectangle and ellipse, and text with size and bold. Foreground and background colors, with a color picker tool.
 - **Selecting:** rectangle, ellipse and lasso. Painting stays inside the selection; invert it, fill it, copy, cut and paste it as a new layer, or crop the picture to it.
 - **Moving:** drag the active layer with the move tool or nudge it with the arrows.
+- **Free transform:** a box with handles around the layer, or around what is selected, to move, scale, flip and rotate it before it is painted back.
 - **Picture:** crop, resize, rotate and flip.
 - **Adjustments:** brightness and contrast, hue and saturation (both with a live preview), invert colors and grayscale, on the active layer.
 - **Editing:** undo and redo for every change.
@@ -57,7 +58,10 @@ The keys are the ones Photoshop uses for the same things. `Ctrl` is `⌘` and `A
 | `Delete` | Erase what is selected |
 | `Alt+Delete`, `Shift+F5` | Fill with the foreground color |
 | `Ctrl+Delete` | Fill with the background color |
-| `Enter`, `Esc` | Apply the crop, cancel it |
+| `Enter`, `Esc` | Apply the crop or the free transform, cancel it |
+| `Ctrl+T` | Free transform: drag a handle to scale, outside the box to rotate, inside to move |
+| `Shift` + drag, in free transform | Change the proportions from a corner, rotate in steps of 15°, move along one axis |
+| `Alt` + drag, in free transform | Scale around the middle |
 | `Ctrl+Shift+N` | New layer |
 | `Ctrl+J` | New layer with what is selected, or a copy of the layer |
 | `Ctrl+E` | Merge the layer into the one below |
@@ -65,7 +69,7 @@ The keys are the ones Photoshop uses for the same things. `Ctrl` is `⌘` and `A
 | `Ctrl+Shift+]`, `Ctrl+Shift+[` | Layer to the top, to the bottom |
 | `Alt+]`, `Alt+[` | Go to the layer above, below |
 | `Ctrl+,` | Show or hide the layer |
-| Arrows, `Shift` + arrows | With the move tool, move the layer by 1 px, by 10 px |
+| Arrows, `Shift` + arrows | With the move tool or in free transform, move by 1 px, by 10 px |
 | `Ctrl+Alt+I` | Resize the picture |
 | `Ctrl+U` | Hue and saturation |
 | `Ctrl+I`, `Ctrl+Shift+U` | Invert the colors, grayscale |
