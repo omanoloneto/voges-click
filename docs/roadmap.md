@@ -30,7 +30,7 @@ Nothing new to show, but everything after this depends on it.
 
 1. **Large pictures stay fast.** Measure painting, zooming, panning, undo and saving on an 8192 px picture with dozens of layers, and fix what lags: draw only the part of the picture that changed, keep undo steps as the changed region instead of whole layers, and give the undo history a memory budget.
 2. **PSD checked against the real thing.** Open files saved by Photoshop, GIMP, Photopea, Krita and Affinity, and open ours in each of them. Fix what differs.
-3. **Known flaws of 1.0.** A brush click outside the picture creates an empty undo step; Enter in the text dialog adds a line instead of confirming; the adjustment dialogs on small windows.
+3. ~~**Known flaws of 1.0.** A brush click outside the picture creates an empty undo step; Enter in the text dialog adds a line instead of confirming; the adjustment dialogs on small windows.~~ Fixed after 1.1.
 4. **Installers and updater checked on real Windows and Linux machines.**
 5. **Several pictures open at once**, in tabs, with copy and paste between them.
 6. ~~**Photoshop's keyboard shortcuts** for everything that already exists.~~ Done after 1.0; the README lists the keys.

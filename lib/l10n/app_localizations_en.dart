@@ -428,6 +428,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get textHint => 'Type the text';
 
   @override
+  String get textEnterHint => 'Enter confirms; Shift+Enter starts a new line';
+
+  @override
   String get fontSize => 'Size';
 
   @override

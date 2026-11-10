@@ -9,6 +9,9 @@ enum ShapeKind { line, rectangle, ellipse }
 /// Something drawn with one drag, painted the same way while it is drawn
 /// and when it goes into the layer.
 sealed class Mark {
+  /// The area [paint] may reach, in image pixels.
+  Rect get bounds;
+
   void paint(Canvas canvas);
 }
 
@@ -17,6 +20,7 @@ sealed class Mark {
 final class PenMark extends Mark {
   PenMark(this.kind, this.color, this.width, this.hardness, Offset start)
     : _last = start,
+      _points = Rect.fromPoints(start, start),
       _path = Path()..moveTo(start.dx, start.dy);
 
   final PenKind kind;
@@ -29,11 +33,19 @@ final class PenMark extends Mark {
   final double hardness;
   final Path _path;
   Offset _last;
+  Rect _points;
   var _moved = false;
+
+  double get _blur => kind == PenKind.pencil ? 0 : width * (1 - hardness) / 4;
+
+  /// The blur fades out about three times its radius away.
+  @override
+  Rect get bounds => _points.inflate(width / 2 + 3 * _blur + 1);
 
   void add(Offset point) {
     if (point == _last) return;
     _path.lineTo(point.dx, point.dy);
+    _points = _points.expandToInclude(Rect.fromPoints(point, point));
     _last = point;
     _moved = true;
   }
@@ -45,7 +57,7 @@ final class PenMark extends Mark {
       ..color = color
       ..isAntiAlias = !hard;
     if (kind == PenKind.eraser) paint.blendMode = BlendMode.dstOut;
-    final blur = hard ? 0.0 : width * (1 - hardness) / 4;
+    final blur = _blur;
     if (blur > 0.2) {
       paint.maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
     }
@@ -82,14 +94,18 @@ final class ShapeMark extends Mark {
 
   bool get isEmpty => start == end;
 
+  bool get _fills => filled && kind != ShapeKind.line;
+
+  @override
+  Rect get bounds =>
+      Rect.fromPoints(start, end).inflate(_fills ? 1 : width / 2 + 1);
+
   @override
   void paint(Canvas canvas) {
     final paint = Paint()
       ..color = color
       ..strokeWidth = width
-      ..style = filled && kind != ShapeKind.line
-          ? PaintingStyle.fill
-          : PaintingStyle.stroke
+      ..style = _fills ? PaintingStyle.fill : PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.miter;
     final box = Rect.fromPoints(start, end);
@@ -116,6 +132,9 @@ final class GradientMark extends Mark {
   Offset end;
 
   bool get isEmpty => start == end;
+
+  @override
+  Rect get bounds => area;
 
   @override
   void paint(Canvas canvas) {

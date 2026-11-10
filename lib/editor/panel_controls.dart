@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Width of the column of panels beside the picture.
+const sidePanelWidth = 280.0;
+
 /// Small icon button of the side panels, in the colors of the theme.
 class PanelIconButton extends StatelessWidget {
   const PanelIconButton({

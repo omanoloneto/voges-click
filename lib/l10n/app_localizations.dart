@@ -892,6 +892,12 @@ abstract class AppLocalizations {
   /// **'Type the text'**
   String get textHint;
 
+  /// No description provided for @textEnterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter confirms; Shift+Enter starts a new line'**
+  String get textEnterHint;
+
   /// No description provided for @fontSize.
   ///
   /// In en, this message translates to:

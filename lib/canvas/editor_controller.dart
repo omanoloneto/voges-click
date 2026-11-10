@@ -253,7 +253,7 @@ class EditorController extends ChangeNotifier {
       ShapeMark(:final isEmpty) || GradientMark(:final isEmpty) => !isEmpty,
       null => false,
     };
-    if (drawn) _commitPaint(mark!.paint);
+    if (drawn) _commitPaint(mark!.paint, bounds: mark.bounds);
 
     final shift = _moveShift;
     _moveShift = null;
@@ -964,11 +964,16 @@ class EditorController extends ChangeNotifier {
   }
 
   /// One undo step: the active layer with [draw] painted on it, inside the
-  /// image and the selection.
-  void _commitPaint(void Function(Canvas canvas) draw) {
+  /// image and the selection. [bounds] is how far [draw] reaches, when that
+  /// is not everywhere: paint that cannot show makes no step.
+  void _commitPaint(void Function(Canvas canvas) draw, {Rect? bounds}) {
     if (!canPaint) return;
     final layer = activeLayer;
     final selection = _selection;
+    var reach = imageRect;
+    if (selection != null) reach = reach.intersect(selection.getBounds());
+    if (bounds != null) reach = reach.intersect(bounds);
+    if (reach.isEmpty) return;
     final area = _roomFor(layer.bounds.expandToInclude(imageRect));
     final image = renderImage(area.width.toInt(), area.height.toInt(), (
       canvas,

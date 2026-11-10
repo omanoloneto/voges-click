@@ -132,6 +132,7 @@
   "applyCrop": "Aplicar recorte",
   "textTitle": "Texto",
   "textHint": "Escribe el texto",
+  "textEnterHint": "Intro confirma; Mayús+Intro empieza otra línea",
   "fontSize": "Tamaño",
   "bold": "Negrita",
   "renameLayerTitle": "Cambiar nombre de la capa",

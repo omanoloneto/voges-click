@@ -428,6 +428,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get textHint => 'Digite o texto';
 
   @override
+  String get textEnterHint => 'Enter confirma; Shift+Enter começa outra linha';
+
+  @override
   String get fontSize => 'Tamanho';
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voges_click/app.dart';
+import 'package:voges_click/canvas/canvas_view.dart';
 import 'package:voges_click/canvas/image_ops.dart';
 import 'package:voges_click/canvas/editor_controller.dart';
 import 'package:voges_click/canvas/tool_settings.dart';
@@ -14,8 +15,12 @@ import 'package:voges_click/files/image_files.dart';
 import 'package:voges_click/files/system_open.dart';
 import 'package:voges_click/l10n/app_language.dart';
 
-Future<EditorController> _pump(WidgetTester tester, {Locale? locale}) async {
-  tester.view.physicalSize = const Size(1400, 900);
+Future<EditorController> _pump(
+  WidgetTester tester, {
+  Locale? locale,
+  Size window = const Size(1400, 900),
+}) async {
+  tester.view.physicalSize = window;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final controller = EditorController(
@@ -82,6 +87,42 @@ void main() {
     await tester.pump();
     expect(controller.document.dirty, isTrue);
     expect(find.byTooltip('Unsaved changes'), findsOneWidget);
+  });
+
+  testWidgets('a brush click beside the picture leaves no undo step', (
+    tester,
+  ) async {
+    final controller = await _pump(tester);
+    final canvas = find.byWidgetPredicate(
+      (widget) => widget is CustomPaint && widget.size == const Size(200, 100),
+    );
+    final edge = tester.getTopLeft(canvas) + const Offset(0, 50);
+
+    await tester.tapAt(edge - const Offset(15, 0));
+    await tester.pump();
+    expect(controller.canUndo, isFalse);
+    expect(controller.document.dirty, isFalse);
+
+    // close enough for the brush to reach the picture
+    await tester.tapAt(edge - const Offset(3, 0));
+    await tester.pump();
+    expect(controller.canUndo, isTrue);
+  });
+
+  testWidgets('an adjustment keeps off the picture in the smallest window', (
+    tester,
+  ) async {
+    await _pump(tester, window: const Size(900, 600));
+    await _chord(tester, [LogicalKeyboardKey.control], LogicalKeyboardKey.keyU);
+    await tester.pumpAndSettle();
+    expect(find.text('Hue'), findsOneWidget);
+
+    final dialog = tester.getRect(
+      find
+          .descendant(of: find.byType(Dialog), matching: find.byType(Material))
+          .first,
+    );
+    expect(dialog.overlaps(tester.getRect(find.byType(CanvasView))), isFalse);
   });
 
   testWidgets('the status bar shows the size and the zoom', (tester) async {
