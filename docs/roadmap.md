@@ -32,7 +32,7 @@ Nothing new to show, but everything after this depends on it.
 2. **PSD checked against the real thing.** Open files saved by Photoshop, GIMP, Photopea, Krita and Affinity, and open ours in each of them. Fix what differs.
 3. ~~**Known flaws of 1.0.** A brush click outside the picture creates an empty undo step; Enter in the text dialog adds a line instead of confirming; the adjustment dialogs on small windows.~~ Fixed after 1.1.
 4. **Installers and updater checked on real Windows and Linux machines.**
-5. **Several pictures open at once**, in tabs, with copy and paste between them.
+5. ~~**Several pictures open at once**, in tabs, with copy and paste between them.~~ Done after 1.1.
 6. ~~**Photoshop's keyboard shortcuts** for everything that already exists.~~ Done after 1.0; the README lists the keys.
 
 ## Phase 1: the everyday tools

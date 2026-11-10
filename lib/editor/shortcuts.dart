@@ -17,6 +17,9 @@ class ShortcutActions {
     required this.open,
     required this.save,
     required this.saveAs,
+    required this.close,
+    required this.nextPicture,
+    required this.previousPicture,
     required this.copy,
     required this.cut,
     required this.paste,
@@ -31,6 +34,9 @@ class ShortcutActions {
   final VoidCallback open;
   final VoidCallback save;
   final VoidCallback saveAs;
+  final VoidCallback close;
+  final VoidCallback nextPicture;
+  final VoidCallback previousPicture;
   final VoidCallback copy;
   final VoidCallback cut;
   final VoidCallback paste;
@@ -81,6 +87,12 @@ Map<ShortcutActivator, VoidCallback> editorShortcuts(
     shortcut(LogicalKeyboardKey.keyO): actions.open,
     shortcut(LogicalKeyboardKey.keyS): actions.save,
     shortcut(LogicalKeyboardKey.keyS, shift: true): actions.saveAs,
+    shortcut(LogicalKeyboardKey.keyW): actions.close,
+    // Ctrl on every system, as in Photoshop
+    const SingleActivator(LogicalKeyboardKey.tab, control: true):
+        actions.nextPicture,
+    const SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true):
+        actions.previousPicture,
 
     // Edit
     shortcut(LogicalKeyboardKey.keyZ): controller.undo,

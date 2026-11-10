@@ -5,22 +5,16 @@ import 'package:voges_updater/voges_updater.dart'
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
-import 'canvas/image_ops.dart';
-import 'canvas/editor_controller.dart';
 import 'canvas/tool_settings.dart';
-import 'document/image_document.dart';
-import 'document/layer.dart';
+import 'editor/open_pictures.dart';
 import 'files/image_clipboard.dart';
 import 'files/image_files.dart';
 import 'files/system_open.dart';
 import 'l10n/app_language.dart';
-import 'l10n/app_localizations.dart';
+import 'l10n/l10n.dart';
 import 'shell/platform.dart';
 import 'shell/title_bar.dart';
 import 'shell/window_buttons.dart';
-
-/// Size of the image the app starts with.
-const _startWidth = 1280, _startHeight = 720;
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,22 +56,13 @@ Future<void> main(List<String> arguments) async {
   final l10n = lookupAppLocalizations(
     language.resolve(WidgetsBinding.instance.platformDispatcher.locales),
   );
-  final controller = EditorController(
-    document: ImageDocument(
-      DocumentState(_startWidth, _startHeight, [
-        Layer(
-          id: 1,
-          name: l10n.backgroundLayer,
-          image: blankImage(_startWidth, _startHeight, const Color(0xFFFFFFFF)),
-        ),
-      ]),
-    ),
-    settings: ToolSettings(),
-  );
 
   runApp(
     VogesClickApp(
-      controller: controller,
+      pictures: OpenPictures(
+        settings: ToolSettings(),
+        layerName: l10n.layerNamed,
+      ),
       files: files,
       clipboard: ImageClipboard(),
       systemOpen: SystemOpen(files),

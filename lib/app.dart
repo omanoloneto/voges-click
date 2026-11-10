@@ -3,8 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:voges_updater/voges_updater.dart'
     show UpdateCheck, UpdaterLocalizations;
 
-import 'canvas/editor_controller.dart';
 import 'editor/editor_screen.dart';
+import 'editor/open_pictures.dart';
 import 'files/image_clipboard.dart';
 import 'files/image_files.dart';
 import 'files/system_open.dart';
@@ -16,7 +16,7 @@ const brandColor = Color(0xFF845FDD);
 
 class VogesClickApp extends StatelessWidget {
   const VogesClickApp({
-    required this.controller,
+    required this.pictures,
     required this.files,
     required this.clipboard,
     required this.systemOpen,
@@ -27,7 +27,7 @@ class VogesClickApp extends StatelessWidget {
     super.key,
   });
 
-  final EditorController controller;
+  final OpenPictures pictures;
   final ImageFiles files;
   final ImageClipboard clipboard;
   final SystemOpen systemOpen;
@@ -66,7 +66,7 @@ class VogesClickApp extends StatelessWidget {
           UpdaterLocalizations.delegate,
         ],
         home: EditorScreen(
-          controller: controller,
+          pictures: pictures,
           files: files,
           clipboard: clipboard,
           systemOpen: systemOpen,

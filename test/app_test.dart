@@ -4,16 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voges_click/app.dart';
 import 'package:voges_click/canvas/canvas_view.dart';
-import 'package:voges_click/canvas/image_ops.dart';
 import 'package:voges_click/canvas/editor_controller.dart';
 import 'package:voges_click/canvas/tool_settings.dart';
-import 'package:voges_click/document/image_document.dart';
-import 'package:voges_click/document/layer.dart';
+import 'package:voges_click/editor/open_pictures.dart';
 import 'package:voges_click/editor/status_bar.dart';
 import 'package:voges_click/files/image_clipboard.dart';
 import 'package:voges_click/files/image_files.dart';
 import 'package:voges_click/files/system_open.dart';
 import 'package:voges_click/l10n/app_language.dart';
+import 'package:voges_click/l10n/l10n.dart';
 
 Future<EditorController> _pump(
   WidgetTester tester, {
@@ -23,22 +22,17 @@ Future<EditorController> _pump(
   tester.view.physicalSize = window;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final controller = EditorController(
-    document: ImageDocument(
-      DocumentState(200, 100, [
-        Layer(
-          id: 1,
-          name: 'Background',
-          image: blankImage(200, 100, const Color(0xFFFFFFFF)),
-        ),
-      ]),
-    ),
+  final pictures = OpenPictures(
     settings: ToolSettings(),
+    startWidth: 200,
+    startHeight: 100,
+    layerName: lookupAppLocalizations(locale ?? const Locale('en')).layerNamed,
   );
+  addTearDown(pictures.dispose);
   final files = ImageFiles();
   await tester.pumpWidget(
     VogesClickApp(
-      controller: controller,
+      pictures: pictures,
       files: files,
       clipboard: ImageClipboard(),
       systemOpen: SystemOpen(files),
@@ -47,7 +41,7 @@ Future<EditorController> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return controller;
+  return pictures.active.controller;
 }
 
 /// Presses [key] with [modifiers] held.
@@ -72,7 +66,8 @@ void main() {
     tester,
   ) async {
     final controller = await _pump(tester);
-    expect(find.text('Untitled'), findsOneWidget);
+    // in the title bar and on the tab
+    expect(find.text('Untitled'), findsNWidgets(2));
 
     await tester.tap(find.byTooltip('Pencil (B)'));
     expect(controller.settings.tool, EditTool.pencil);
@@ -86,7 +81,7 @@ void main() {
     await gesture.up();
     await tester.pump();
     expect(controller.document.dirty, isTrue);
-    expect(find.byTooltip('Unsaved changes'), findsOneWidget);
+    expect(find.byTooltip('Unsaved changes'), findsNWidgets(2));
   });
 
   testWidgets('a brush click beside the picture leaves no undo step', (
@@ -320,6 +315,6 @@ void main() {
     expect(find.text('Arquivo'), findsOneWidget);
     expect(find.byTooltip('Balde de tinta (G)'), findsOneWidget);
     expect(find.text('Camadas'), findsOneWidget);
-    expect(find.text('Sem título'), findsOneWidget);
+    expect(find.text('Sem título'), findsNWidgets(2));
   });
 }

@@ -7,10 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voges_click/app.dart';
 import 'package:voges_click/canvas/editor_controller.dart';
-import 'package:voges_click/canvas/image_ops.dart';
 import 'package:voges_click/canvas/tool_settings.dart';
-import 'package:voges_click/document/image_document.dart';
-import 'package:voges_click/document/layer.dart';
+import 'package:voges_click/editor/open_pictures.dart';
 import 'package:voges_click/files/image_clipboard.dart';
 import 'package:voges_click/files/image_files.dart';
 import 'package:voges_click/files/system_open.dart';
@@ -34,22 +32,16 @@ Future<EditorController> _pump(
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final controller = EditorController(
-    document: ImageDocument(
-      DocumentState(200, 100, [
-        Layer(
-          id: 1,
-          name: 'Background',
-          image: blankImage(200, 100, const Color(0xFFFFFFFF)),
-        ),
-      ]),
-    ),
+  final pictures = OpenPictures(
     settings: ToolSettings(),
+    startWidth: 200,
+    startHeight: 100,
   );
+  addTearDown(pictures.dispose);
   final files = ImageFiles();
   await tester.pumpWidget(
     VogesClickApp(
-      controller: controller,
+      pictures: pictures,
       files: files,
       clipboard: ImageClipboard(),
       systemOpen: SystemOpen(files),
@@ -59,7 +51,7 @@ Future<EditorController> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return controller;
+  return pictures.active.controller;
 }
 
 final class _Feed implements ReleaseFeed {

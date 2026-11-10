@@ -15,12 +15,14 @@ class FilePanelActions {
     required this.open,
     required this.save,
     required this.saveAs,
+    required this.close,
   });
 
   final VoidCallback newImage;
   final VoidCallback open;
   final VoidCallback save;
   final ValueChanged<SaveFormat> saveAs;
+  final VoidCallback close;
 }
 
 /// The "File" panel: file actions and the language.
@@ -157,6 +159,12 @@ class _FilePanel extends StatelessWidget {
                       () => menu.isOpen ? menu.close() : menu.open(),
                       opensMenu: true,
                     ),
+                  ),
+                  _PanelAction(
+                    Icons.close,
+                    l10n.close,
+                    shortcutLabel('W'),
+                    () => _run(context, actions.close),
                   ),
                 ],
               ),
