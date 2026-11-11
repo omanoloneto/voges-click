@@ -1,10 +1,8 @@
 Voges Click: an image editor with layers for macOS, Windows and Linux, in the spirit of Photoshop. Part of the Voges suite, next to Voges Word, Voges Pencil, Voges Tables and Voges Slides.
 
-## New in 1.2.0
+## New in 1.2.1
 
-- **Tabs:** several pictures open at once, each in its tab above the canvas, with its own zoom, place and undo history. Open takes several files at once, and what is copied in one picture can be pasted in another. `Ctrl+W` closes the picture, `Ctrl+Tab` and `Ctrl+Shift+Tab` go to the next and the previous one, and closing a picture with unsaved changes asks first.
-- **Large pictures stay fast:** on a picture of 8192 px with 24 layers, painting, undoing, moving a layer, previewing an adjustment, zooming and panning went from 50 to 80 ms per frame to the pace of a 60 Hz display, and the memory in use while painting from as much as 5 GB to about 1.5 GB. The undo history keeps only the parts of the picture each step changed, so many more steps fit in it. Saving takes as long as it did, and applying an adjustment to a whole layer of that size got slower. [The numbers](https://github.com/omanoloneto/voges-click/blob/main/docs/performance.md) and how they were taken.
-- **Fixes:** paint that misses the picture or the selection no longer leaves an empty undo step; `Enter` confirms the text dialog and `Shift+Enter` starts a new line; the adjustment dialogs open at the bottom right, over the side panels, so the picture being adjusted stays in sight in a small window.
+- **Linux:** the window shows the app's icon in Alt+Tab and in window lists.
 
 ## What Voges Click does
 
